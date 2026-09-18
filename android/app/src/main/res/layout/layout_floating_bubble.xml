@@ -6,11 +6,11 @@
     android:clipChildren="false"
     android:clipToPadding="false">
 
-    <!-- 1. Full Circular Floating Bubble Layout (When Active or Restored) -->
+    <!-- 1. Full Circular FHM Button (When active/restored) -->
     <RelativeLayout
         android:id="@+id/fullBubbleLayout"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
+        android:layout_width="54dp"
+        android:layout_height="54dp"
         android:background="@drawable/bg_circular_bubble"
         android:elevation="12dp"
         android:gravity="center"
@@ -23,52 +23,35 @@
             android:layout_centerHorizontal="true"
             android:text="FHM"
             android:textColor="#FFFFFF"
-            android:textSize="13sp"
+            android:textSize="12sp"
             android:textStyle="bold" />
 
         <View
             android:id="@+id/statusIndicator"
-            android:layout_width="6dp"
-            android:layout_height="6dp"
+            android:layout_width="5dp"
+            android:layout_height="5dp"
             android:layout_alignParentBottom="true"
             android:layout_centerHorizontal="true"
-            android:layout_marginBottom="6dp"
+            android:layout_marginBottom="5dp"
             android:background="@drawable/bg_indicator_active" />
     </RelativeLayout>
 
-    <!-- 2. Small Translucent Edge Handle (When Auto-Collapsed after 3.5s inactivity) -->
+    <!-- 2. Small Subtle Edge Handle (When idle at screen edge - NO text) -->
     <LinearLayout
         android:id="@+id/collapsedHandle"
-        android:layout_width="20dp"
-        android:layout_height="64dp"
+        android:layout_width="14dp"
+        android:layout_height="54dp"
         android:background="@drawable/bg_collapsed_handle"
         android:elevation="10dp"
         android:gravity="center"
         android:orientation="vertical"
-        android:padding="2dp"
         android:visibility="gone">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="•"
-            android:textColor="#93C5FD"
-            android:textSize="16sp" />
-
-        <TextView
-            android:id="@+id/tvHandleText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="FHM"
-            android:textColor="#FFFFFF"
-            android:textSize="8sp"
-            android:textStyle="bold" />
-
+        <!-- Subtle minimalist grip indicator (No text) -->
         <View
-            android:layout_width="4dp"
-            android:layout_height="4dp"
-            android:layout_marginTop="2dp"
-            android:background="@drawable/bg_indicator_active" />
+            android:layout_width="2dp"
+            android:layout_height="24dp"
+            android:background="@drawable/bg_grip_bar" />
     </LinearLayout>
 
 </FrameLayout>

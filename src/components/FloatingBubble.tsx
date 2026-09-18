@@ -5,10 +5,7 @@ import {
   Copy,
   Check,
   X,
-  Languages,
   Target,
-  ChevronRight,
-  ChevronLeft,
 } from 'lucide-react';
 import { UserSettings } from '../types/translation';
 import { getLanguageByCode } from '../data/languages';
@@ -39,15 +36,14 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
   settings,
   onUpdatePosition,
   onOpenControls,
-  onClose,
 }) => {
-  // State: 'docked' (full circle at edge) | 'semi_hidden' (tucked ~70% into edge) | 'dragging' | 'translating'
-  const [bubbleState, setBubbleState] = useState<'docked' | 'semi_hidden' | 'dragging' | 'translating'>('docked');
+  // States: 'docked' (full circle at edge) | 'semi_hidden' (subtle edge handle) | 'dragging' | 'translating'
+  const [bubbleState, setBubbleState] = useState<'docked' | 'semi_hidden' | 'dragging' | 'translating'>('semi_hidden');
   const [dockSide, setDockSide] = useState<'left' | 'right'>(settings.floatingEdgeSide || 'left');
 
-  // Position on screen
+  // Coordinates
   const [position, setPosition] = useState<{ x: number; y: number }>(() => {
-    const defaultX = settings.floatingEdgeSide === 'right' ? (typeof window !== 'undefined' ? window.innerWidth - 68 : 320) : 10;
+    const defaultX = settings.floatingEdgeSide === 'right' ? (typeof window !== 'undefined' ? window.innerWidth - 60 : 320) : 0;
     return settings.floatingBubblePosition || { x: defaultX, y: 180 };
   });
 
@@ -56,12 +52,12 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
   const [hasMoved, setHasMoved] = useState(false);
   const [targetReticlePos, setTargetReticlePos] = useState<{ x: number; y: number } | null>(null);
 
-  // Active translation result card
+  // Active translation result popup
   const [activeResult, setActiveResult] = useState<TranslationResultCard | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Timers & refs
-  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const resultDismissTimerRef = useRef<NodeJS.Timeout | null>(null);
   const dragStartRef = useRef<{ clientX: number; clientY: number; posX: number; posY: number }>({
     clientX: 0,
@@ -72,20 +68,20 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
 
   const targetLang = getLanguageByCode(settings.preferredTargetLanguage);
 
-  // Auto-slide deeper into edge after 3.5 seconds of inactivity
-  const startInactivityTimer = useCallback(() => {
-    if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current);
+  // Auto-slide into edge after 3 seconds of inactivity
+  const startIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
     }
-    inactivityTimerRef.current = setTimeout(() => {
+    idleTimerRef.current = setTimeout(() => {
       setBubbleState('semi_hidden');
-    }, 3500);
+    }, 3000);
   }, []);
 
-  const clearInactivityTimer = useCallback(() => {
-    if (inactivityTimerRef.current) {
-      clearTimeout(inactivityTimerRef.current);
-      inactivityTimerRef.current = null;
+  const clearIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) {
+      clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = null;
     }
   }, []);
 
@@ -95,15 +91,15 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
     const initialSide = position.x > screenWidth / 2 ? 'right' : 'left';
     setDockSide(initialSide);
 
-    if (settings.floatingDockToEdge) {
-      const edgeX = initialSide === 'left' ? 10 : screenWidth - 68;
-      setPosition((prev) => ({ x: edgeX, y: prev.y }));
-    }
+    const edgeX = initialSide === 'left' ? 0 : screenWidth - 58;
+    setPosition((prev) => ({ x: edgeX, y: prev.y }));
 
-    startInactivityTimer();
+    // Start in semi_hidden edge handle state as per Hi Translate UX
+    setBubbleState('semi_hidden');
+    startIdleTimer();
 
     return () => {
-      clearInactivityTimer();
+      clearIdleTimer();
       if (resultDismissTimerRef.current) clearTimeout(resultDismissTimerRef.current);
     };
   }, []);
@@ -138,7 +134,7 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
     return 'Questo è un testo di esempio sullo schermo da tradurre in tempo reale.';
   };
 
-  // Perform single drop translation
+  // Perform translation on drop
   const handleDropTranslation = async (dropX: number, dropY: number) => {
     setBubbleState('translating');
     androidBridge.vibrate(30);
@@ -165,7 +161,7 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
 
       setActiveResult(result);
 
-      // Save into translation history
+      // Save to history
       saveHistoryItem({
         originalText: response.originalText,
         translatedText: response.translatedText,
@@ -185,7 +181,7 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
         setActiveResult(null);
       }, 10000);
     } catch (err: any) {
-      console.error('Drop translation error:', err);
+      console.error('Drop translation failed:', err);
       setActiveResult({
         id: `drop_${Date.now()}`,
         originalText: detectedText,
@@ -200,33 +196,33 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
       // Step 5: Automatically move towards nearest screen edge
       const screenWidth = window.innerWidth;
       const targetSide: 'left' | 'right' = dropX > screenWidth / 2 ? 'right' : 'left';
-      const edgeX = targetSide === 'left' ? 10 : screenWidth - 68;
+      const edgeX = targetSide === 'left' ? 0 : screenWidth - 58;
       const finalY = Math.max(65, Math.min(window.innerHeight - 80, dropY));
 
       setDockSide(targetSide);
       setPosition({ x: edgeX, y: finalY });
       onUpdatePosition({ x: edgeX, y: finalY }, targetSide);
 
-      // Step 6: Keep the bubble circular while initially docked
+      // Keep circular initially at edge
       setBubbleState('docked');
 
-      // Step 7: After short period of inactivity, automatically slide deeper toward edge
-      startInactivityTimer();
+      // After short idle period, slide mostly inside the edge again
+      startIdleTimer();
     }
   };
 
   // Drag Gesture Handlers
   const handleStartDrag = (clientX: number, clientY: number) => {
-    clearInactivityTimer();
+    clearIdleTimer();
     setIsDragging(true);
     setHasMoved(false);
     setBubbleState('dragging');
 
-    // If starting from semi-hidden state, adjust starting posX so the bubble expands under cursor
+    // If starting from semi-hidden edge handle, calculate centered position
     let startPosX = position.x;
     if (bubbleState === 'semi_hidden') {
       const screenWidth = window.innerWidth;
-      startPosX = dockSide === 'left' ? 10 : screenWidth - 68;
+      startPosX = dockSide === 'left' ? 4 : screenWidth - 60;
       setPosition((prev) => ({ ...prev, x: startPosX }));
     }
 
@@ -244,14 +240,14 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
     const dx = clientX - dragStartRef.current.clientX;
     const dy = clientY - dragStartRef.current.clientY;
 
-    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) {
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
       setHasMoved(true);
     }
 
-    const maxX = window.innerWidth - 64;
-    const maxY = window.innerHeight - 70;
+    const maxX = window.innerWidth - 56;
+    const maxY = window.innerHeight - 66;
 
-    const newX = Math.max(4, Math.min(maxX, dragStartRef.current.posX + dx));
+    const newX = Math.max(0, Math.min(maxX, dragStartRef.current.posX + dx));
     const newY = Math.max(50, Math.min(maxY, dragStartRef.current.posY + dy));
 
     setPosition({ x: newX, y: newY });
@@ -264,17 +260,17 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
     setTargetReticlePos(null);
 
     if (hasMoved) {
-      // Step 4: Released over target area -> single OCR translation action
+      // Released over target area -> single OCR translation action
       handleDropTranslation(clientX, clientY);
     } else {
-      // Simple tap -> restored circular bubble and open options
+      // Tap on edge handle restores full circular bubble and opens options
       setBubbleState('docked');
-      startInactivityTimer();
+      startIdleTimer();
       onOpenControls();
     }
   };
 
-  // Touch Handlers
+  // Touch handlers
   const onTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
     handleStartDrag(t.clientX, t.clientY);
@@ -290,7 +286,7 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
     handleEndDrag(t.clientX, t.clientY);
   };
 
-  // Mouse Handlers
+  // Mouse handlers
   const onMouseDown = (e: React.MouseEvent) => {
     handleStartDrag(e.clientX, e.clientY);
 
@@ -339,128 +335,98 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
     };
   };
 
-  // Determine transform offset when semi-hidden at edge
   const isSemiHidden = bubbleState === 'semi_hidden' && !isDragging;
-  const slideTransform = isSemiHidden
-    ? dockSide === 'left'
-      ? 'translateX(-66%)'
-      : 'translateX(66%)'
-    : 'translateX(0)';
 
   return (
     <div id="fhm-floating-translator-root" className="pointer-events-none fixed inset-0 z-50 overflow-hidden select-none">
-      {/* 1. Target Aiming Reticle (Visible during drag) */}
+      {/* 1. Minimalist Target Aiming Reticle (NO text label beside it while dragging) */}
       {isDragging && hasMoved && targetReticlePos && (
         <div
           style={{
             left: `${targetReticlePos.x}px`,
             top: `${targetReticlePos.y}px`,
           }}
-          className="fixed -translate-x-1/2 -translate-y-1/2 pointer-events-none z-40 flex flex-col items-center justify-center animate-fade-in"
+          className="fixed -translate-x-1/2 -translate-y-1/2 pointer-events-none z-40 flex items-center justify-center animate-fade-in"
         >
-          <div className="relative w-16 h-16 flex items-center justify-center">
-            <div className="absolute inset-0 rounded-full border-2 border-dashed border-sky-400/80 animate-spin" style={{ animationDuration: '8s' }} />
-            <div className="w-8 h-8 rounded-full border border-sky-300 bg-sky-500/10 backdrop-blur-sm flex items-center justify-center shadow-lg shadow-sky-500/30">
-              <Target className="w-4 h-4 text-sky-300" />
+          <div className="relative w-14 h-14 flex items-center justify-center">
+            <div className="absolute inset-0 rounded-full border-2 border-dashed border-sky-400/90 animate-spin" style={{ animationDuration: '6s' }} />
+            <div className="w-7 h-7 rounded-full border border-sky-300 bg-sky-500/15 backdrop-blur-sm flex items-center justify-center shadow-lg shadow-sky-500/30">
+              <Target className="w-3.5 h-3.5 text-sky-300" />
             </div>
-          </div>
-          <div className="mt-1 px-2.5 py-0.5 rounded-full bg-slate-900/90 border border-sky-500/40 text-[10px] font-bold text-sky-300 shadow-xl whitespace-nowrap">
-            Release to translate into {targetLang.name}
           </div>
         </div>
       )}
 
-      {/* 2. Circular FHM Bubble with Edge Sliding (Steps 1, 6, 7, 8, 9, 10, 11) */}
-      <div
-        id="fhm-floating-bubble-container"
-        style={{
-          left: `${position.x}px`,
-          top: `${position.y}px`,
-          transform: slideTransform,
-          transition: isDragging ? 'none' : 'transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), left 0.25s ease-out',
-          touchAction: 'none',
-        }}
-        className={`fixed pointer-events-auto z-50 cursor-grab active:cursor-grabbing select-none ${
-          isDragging ? 'scale-110 shadow-2xl' : ''
-        }`}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        onMouseDown={onMouseDown}
-        title={isSemiHidden ? 'Pull FHM Translate bubble from edge' : 'Drag over text to translate'}
-      >
-        <div className="relative flex items-center justify-center">
-          {/* Subtle Outer Glow */}
+      {/* 2. Hi Translate Reference Edge Handle & Floating Button */}
+      {isSemiHidden ? (
+        /* Semi-transparent rounded edge handle (NO text, subtle rounded vertical pill at screen edge) */
+        <div
+          id="fhm-floating-edge-handle"
+          style={{
+            top: `${position.y}px`,
+            [dockSide === 'left' ? 'left' : 'right']: '0px',
+            touchAction: 'none',
+          }}
+          className="fixed pointer-events-auto z-50 cursor-grab active:cursor-grabbing transition-transform active:scale-95"
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onMouseDown={onMouseDown}
+          title="Drag to pull FHM Translator out"
+        >
           <div
-            className={`absolute -inset-1 rounded-full bg-blue-500/30 blur-sm transition-opacity duration-300 ${
-              isSemiHidden ? 'opacity-40 hover:opacity-100' : 'opacity-70'
-            }`}
-          />
-
-          {/* Full Circular FHM Translate Bubble (56px) */}
-          <div
-            className={`relative w-14 h-14 rounded-full bg-gradient-to-tr from-blue-700 via-indigo-600 to-sky-500 border-2 border-white/95 shadow-2xl shadow-blue-950/80 flex flex-col items-center justify-center text-white transition-all ${
-              isSemiHidden
-                ? 'opacity-85 hover:opacity-100 ring-2 ring-sky-400/60 ring-offset-1 ring-offset-slate-900'
-                : 'hover:scale-105'
+            className={`w-3.5 h-14 bg-blue-600/75 hover:bg-blue-500/90 backdrop-blur-md border border-sky-300/40 shadow-lg shadow-blue-900/50 flex items-center justify-center transition-all ${
+              dockSide === 'left'
+                ? 'rounded-r-full border-l-0'
+                : 'rounded-l-full border-r-0'
             }`}
           >
-            {bubbleState === 'translating' ? (
-              <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <span className="font-display font-black text-xs tracking-wider leading-none drop-shadow">
-                  FHM
-                </span>
-                <span className="text-[9px] font-semibold text-sky-200 leading-none mt-0.5">
-                  {targetLang.flag}
-                </span>
-              </>
-            )}
-
-            {/* Active Status Indicator Dot */}
-            <div className="absolute bottom-1 w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-
-            {/* Subtle Edge Gripper Icon when semi-hidden */}
-            {isSemiHidden && (
-              <div
-                className={`absolute top-1/2 -translate-y-1/2 ${
-                  dockSide === 'left' ? 'right-1' : 'left-1'
-                } text-sky-200 pointer-events-none`}
-              >
-                {dockSide === 'left' ? (
-                  <ChevronRight className="w-3 h-3 animate-pulse" />
-                ) : (
-                  <ChevronLeft className="w-3 h-3 animate-pulse" />
-                )}
-              </div>
-            )}
+            {/* Subtle inner grip bar */}
+            <div className="w-0.5 h-6 rounded-full bg-white/70" />
           </div>
-
-          {/* Hover Tooltip when docked */}
-          {!isDragging && bubbleState === 'docked' && (
-            <div
-              className={`absolute top-1/2 -translate-y-1/2 hidden md:flex items-center space-x-1.5 bg-slate-900/95 border border-slate-700 text-white text-[11px] px-2.5 py-1 rounded-lg shadow-xl whitespace-nowrap ${
-                dockSide === 'left' ? 'left-full ml-2' : 'right-full mr-2'
-              }`}
-            >
-              <span className="text-sky-300 font-bold">Drag over text</span>
-              <span className="text-slate-500">|</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenControls();
-                }}
-                className="text-slate-300 hover:text-white underline"
-              >
-                Options
-              </button>
-            </div>
-          )}
         </div>
-      </div>
+      ) : (
+        /* Full circular FHM button (When pulled out or active) */
+        <div
+          id="fhm-floating-bubble-main"
+          style={{
+            left: `${position.x}px`,
+            top: `${position.y}px`,
+            touchAction: 'none',
+          }}
+          className={`fixed pointer-events-auto z-50 cursor-grab active:cursor-grabbing select-none ${
+            isDragging ? 'scale-110 shadow-2xl' : 'transition-transform hover:scale-105'
+          }`}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          onMouseDown={onMouseDown}
+        >
+          <div className="relative flex items-center justify-center">
+            {/* Subtle Glow */}
+            <div className="absolute -inset-1 rounded-full bg-blue-500/30 blur-sm" />
 
-      {/* 3. Non-Blocking Floating Translation Result Card (Step 4 & 16) */}
+            {/* Circular FHM Bubble - NO text label beside it */}
+            <div className="relative w-13 h-13 rounded-full bg-gradient-to-tr from-blue-700 via-indigo-600 to-sky-500 border-2 border-white/95 shadow-xl shadow-blue-950/80 flex flex-col items-center justify-center text-white">
+              {bubbleState === 'translating' ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <span className="font-display font-black text-[11px] tracking-wider leading-none drop-shadow">
+                    FHM
+                  </span>
+                  <span className="text-[8px] font-semibold text-sky-200 leading-none mt-0.5">
+                    {targetLang.flag}
+                  </span>
+                </>
+              )}
+              <div className="absolute bottom-1 w-1 h-1 rounded-full bg-emerald-400" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Temporary Non-Blocking Translation Result Card */}
       {activeResult && (
         <div
           id="fhm-floating-result-card"
@@ -486,7 +452,7 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
             </button>
           </div>
 
-          {/* Text Content */}
+          {/* Content */}
           <div className="space-y-1">
             <p className="text-sm font-bold text-white leading-snug break-words">
               {activeResult.translatedText}

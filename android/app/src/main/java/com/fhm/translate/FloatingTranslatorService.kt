@@ -21,13 +21,12 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
-import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
 
 /**
  * FHM Translate - Native Android Edge-Docked Floating Screen Translator Service
- * Real Android Native WindowManager Overlay
+ * Hi Translate Reference UX Implementation
  * Developer: Fakhrul Islam
  */
 class FloatingTranslatorService : Service() {
@@ -48,11 +47,9 @@ class FloatingTranslatorService : Service() {
     private var screenWidth = 1080
     private var screenHeight = 1920
     private var dockSide: String = "left" // "left" or "right"
-    private val BUBBLE_SIZE_PX = 160 // approx 56dp
-    private val VISIBLE_EDGE_TAB_PX = 50 // approx 18dp visible tab when tucked
 
-    private val autoInactivityRunnable = Runnable {
-        slideIntoEdge()
+    private val autoIdleRunnable = Runnable {
+        dockToEdgeHandle()
     }
 
     private val autoDismissResultRunnable = Runnable {
@@ -86,7 +83,7 @@ class FloatingTranslatorService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 16
+            x = 0
             y = screenHeight / 4
         }
 
@@ -94,7 +91,7 @@ class FloatingTranslatorService : Service() {
         windowManager?.addView(floatingView, params)
 
         setupTouchGestureListener()
-        resetInactivityTimer()
+        resetIdleTimer()
     }
 
     private fun updateScreenDimensions() {
@@ -118,7 +115,7 @@ class FloatingTranslatorService : Service() {
             override fun onTouch(v: View?, event: MotionEvent?): Boolean {
                 when (event?.action) {
                     MotionEvent.ACTION_DOWN -> {
-                        handler.removeCallbacks(autoInactivityRunnable)
+                        handler.removeCallbacks(autoIdleRunnable)
                         initialX = params?.x ?: 0
                         initialY = params?.y ?: 0
                         initialTouchX = event.rawX
@@ -126,9 +123,9 @@ class FloatingTranslatorService : Service() {
                         hasMoved = false
                         isDragging = true
 
-                        // Step 11: If semi-hidden at edge, smoothly pull the complete circular bubble back
+                        // Pull complete circular button out immediately on touch
                         if (isSemiHidden) {
-                            pullOutFromEdge()
+                            restoreFullCircularButton()
                         }
                         return true
                     }
@@ -137,16 +134,16 @@ class FloatingTranslatorService : Service() {
                         val dx = (event.rawX - initialTouchX).toInt()
                         val dy = (event.rawY - initialTouchY).toInt()
 
-                        if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
+                        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
                             hasMoved = true
                         }
 
                         params?.x = initialX + dx
-                        params?.y = Math.max(60, Math.min(screenHeight - 200, initialY + dy))
+                        params?.y = Math.max(50, Math.min(screenHeight - 180, initialY + dy))
                         try {
                             windowManager?.updateViewLayout(floatingView, params)
                         } catch (e: Exception) {
-                            // View layout exception safety
+                            // Layout exception guard
                         }
                         return true
                     }
@@ -157,14 +154,14 @@ class FloatingTranslatorService : Service() {
                         val dropY = event.rawY.toInt()
 
                         if (hasMoved) {
-                            // Step 4: Released over target area -> single-shot OCR & localized screen translation
+                            // Released over target text -> single-shot OCR & localized screen translation
                             performDropTranslation(dropX, dropY)
                         } else {
                             // Single tap -> open floating options panel
                             openFloatingControls()
                         }
 
-                        // Step 5: Automatically snap bubble toward nearest screen edge
+                        // Snap to nearest edge
                         snapToNearestEdge(dropX, params?.y ?: initialY)
                         return true
                     }
@@ -175,20 +172,20 @@ class FloatingTranslatorService : Service() {
     }
 
     /**
-     * Step 5 & 6: Smoothly animate bubble to the nearest edge and keep circular initially
+     * Smoothly animate button to nearest edge and keep full circle initially
      */
     private fun snapToNearestEdge(currentX: Int, targetY: Int) {
         val targetX = if (currentX < screenWidth / 2) {
             dockSide = "left"
-            16
+            0
         } else {
             dockSide = "right"
-            screenWidth - BUBBLE_SIZE_PX - 16
+            screenWidth - (floatingView?.width ?: 150)
         }
 
         val startX = params?.x ?: currentX
         val animator = ValueAnimator.ofInt(startX, targetX)
-        animator.duration = 250
+        animator.duration = 200
         animator.interpolator = DecelerateInterpolator()
         animator.addUpdateListener { anim ->
             params?.x = anim.animatedValue as Int
@@ -202,44 +199,28 @@ class FloatingTranslatorService : Service() {
         animator.start()
 
         isSemiHidden = false
-        resetInactivityTimer()
+        resetIdleTimer()
     }
 
     /**
-     * Step 7, 8 & 9: Auto slide deeper toward edge, keeping a small visible tab (DO NOT remove completely)
+     * Slide mostly inside the edge, showing only the subtle rounded handle (no text)
      */
-    private fun slideIntoEdge() {
+    private fun dockToEdgeHandle() {
         if (isDragging || isSemiHidden) return
         isSemiHidden = true
 
-        val startX = params?.x ?: 16
-        val targetX = if (dockSide == "left") {
-            - (BUBBLE_SIZE_PX - VISIBLE_EDGE_TAB_PX)
+        val fullBubble = floatingView?.findViewById<View>(R.id.fullBubbleLayout)
+        val handleView = floatingView?.findViewById<View>(R.id.collapsedHandle)
+
+        fullBubble?.visibility = View.GONE
+        handleView?.visibility = View.VISIBLE
+
+        if (dockSide == "left") {
+            params?.x = 0
         } else {
-            screenWidth - VISIBLE_EDGE_TAB_PX
+            params?.x = screenWidth - (handleView?.width ?: 40)
         }
 
-        val animator = ValueAnimator.ofInt(startX, targetX)
-        animator.duration = 300
-        animator.interpolator = DecelerateInterpolator()
-        animator.addUpdateListener { anim ->
-            params?.x = anim.animatedValue as Int
-            try {
-                windowManager?.updateViewLayout(floatingView, params)
-            } catch (e: Exception) {
-                // Ignore
-            }
-        }
-        animator.start()
-    }
-
-    /**
-     * Step 11: Smoothly pull complete circular bubble back onto the screen
-     */
-    private fun pullOutFromEdge() {
-        isSemiHidden = false
-        val targetX = if (dockSide == "left") 16 else screenWidth - BUBBLE_SIZE_PX - 16
-        params?.x = targetX
         try {
             windowManager?.updateViewLayout(floatingView, params)
         } catch (e: Exception) {
@@ -247,13 +228,37 @@ class FloatingTranslatorService : Service() {
         }
     }
 
-    private fun resetInactivityTimer() {
-        handler.removeCallbacks(autoInactivityRunnable)
-        handler.postDelayed(autoInactivityRunnable, 3500) // 3.5 seconds
+    /**
+     * Restore full circular button smoothly when touched
+     */
+    private fun restoreFullCircularButton() {
+        isSemiHidden = false
+        val fullBubble = floatingView?.findViewById<View>(R.id.fullBubbleLayout)
+        val handleView = floatingView?.findViewById<View>(R.id.collapsedHandle)
+
+        handleView?.visibility = View.GONE
+        fullBubble?.visibility = View.VISIBLE
+
+        if (dockSide == "left") {
+            params?.x = 8
+        } else {
+            params?.x = screenWidth - (fullBubble?.width ?: 150) - 8
+        }
+
+        try {
+            windowManager?.updateViewLayout(floatingView, params)
+        } catch (e: Exception) {
+            // Ignore
+        }
+    }
+
+    private fun resetIdleTimer() {
+        handler.removeCallbacks(autoIdleRunnable)
+        handler.postDelayed(autoIdleRunnable, 3000) // 3 seconds
     }
 
     /**
-     * Step 4: Perform single drop translation with explicit consent
+     * Single-shot OCR translation
      */
     private fun performDropTranslation(dropX: Int, dropY: Int) {
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -351,7 +356,7 @@ class FloatingTranslatorService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("FHM Translate")
-            .setContentText("Drag 🔵 FHM bubble over screen text to translate.")
+            .setContentText("Floating translator is active.")
             .setSmallIcon(R.drawable.ic_fhm_logo)
             .setOngoing(true)
             .setContentIntent(pendingOpenIntent)
@@ -368,7 +373,7 @@ class FloatingTranslatorService : Service() {
                 "FHM Floating Translator Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Shows active status for FHM Translate edge-docked floating overlay."
+                description = "Shows active status for FHM Translate floating translator."
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)
@@ -377,7 +382,7 @@ class FloatingTranslatorService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        handler.removeCallbacks(autoInactivityRunnable)
+        handler.removeCallbacks(autoIdleRunnable)
         handler.removeCallbacks(autoDismissResultRunnable)
         removeResultOverlay()
         if (floatingView != null) {
