@@ -1,0 +1,12 @@
+{
+  "name": "FHM Translate",
+  "description": "Universal mobile-first translation app with floating screen translator, voice conversation, OCR camera translation, and multi-language support. Developer: Fakhrul Islam.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
+

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/bubbleContainer"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:clipChildren="false"
+    android:clipToPadding="false">
+
+    <!-- 1. Full Circular Floating Bubble Layout (When Active or Restored) -->
+    <RelativeLayout
+        android:id="@+id/fullBubbleLayout"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:background="@drawable/bg_circular_bubble"
+        android:elevation="12dp"
+        android:gravity="center"
+        android:visibility="visible">
+
+        <TextView
+            android:id="@+id/tvBrand"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerHorizontal="true"
+            android:text="FHM"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <View
+            android:id="@+id/statusIndicator"
+            android:layout_width="6dp"
+            android:layout_height="6dp"
+            android:layout_alignParentBottom="true"
+            android:layout_centerHorizontal="true"
+            android:layout_marginBottom="6dp"
+            android:background="@drawable/bg_indicator_active" />
+    </RelativeLayout>
+
+    <!-- 2. Small Translucent Edge Handle (When Auto-Collapsed after 3.5s inactivity) -->
+    <LinearLayout
+        android:id="@+id/collapsedHandle"
+        android:layout_width="20dp"
+        android:layout_height="64dp"
+        android:background="@drawable/bg_collapsed_handle"
+        android:elevation="10dp"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="2dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="•"
+            android:textColor="#93C5FD"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/tvHandleText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="FHM"
+            android:textColor="#FFFFFF"
+            android:textSize="8sp"
+            android:textStyle="bold" />
+
+        <View
+            android:layout_width="4dp"
+            android:layout_height="4dp"
+            android:layout_marginTop="2dp"
+            android:background="@drawable/bg_indicator_active" />
+    </LinearLayout>
+
+</FrameLayout>
