@@ -13,6 +13,7 @@ import {
   Smartphone,
   ExternalLink,
   RotateCcw,
+  Download,
 } from 'lucide-react';
 import { UserSettings, Language, PermissionStatus } from '../types/translation';
 import { getLanguageByCode } from '../data/languages';
@@ -235,7 +236,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Section 5: App Information & Developer Credit */}
+          {/* Section 5: Android APK & Export */}
+          <div className="pt-4 space-y-3">
+            <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center space-x-1.5">
+              <Download className="w-4 h-4" />
+              <span>Android APK Download</span>
+            </h3>
+
+            <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-white flex items-center space-x-1.5">
+                  <span>📦 How to get the APK</span>
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold">
+                  GitHub Actions
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                1. Push this project to your <strong>GitHub Repository</strong>.<br />
+                2. GitHub Actions will automatically run the <strong>Build Android APK</strong> workflow.<br />
+                3. Download the generated APK artifact directly from your GitHub <strong>Actions</strong> tab!
+              </p>
+            </div>
+          </div>
+
+          {/* Section 6: App Information & Developer Credit */}
           <div className="pt-4 space-y-3">
             <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center space-x-1.5">
               <Info className="w-4 h-4" />
