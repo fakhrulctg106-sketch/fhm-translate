@@ -15,11 +15,13 @@ import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.webkit.WebViewAssetLoader
 
 class MainActivity : AppCompatActivity() {
 
@@ -48,7 +50,21 @@ class MainActivity : AppCompatActivity() {
         webSettings.useWideViewPort = true
         webSettings.cacheMode = WebSettings.LOAD_DEFAULT
 
+        val assetLoader = WebViewAssetLoader.Builder()
+            .setDomain("appassets.androidplatform.net")
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .addPathHandler("/res/", WebViewAssetLoader.ResourcesPathHandler(this))
+            .build()
+
         webView.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): WebResourceResponse? {
+                val url = request?.url ?: return null
+                return assetLoader.shouldInterceptRequest(url)
+            }
+
             override fun onReceivedError(
                 view: WebView?,
                 request: WebResourceRequest?,
@@ -70,8 +86,8 @@ class MainActivity : AppCompatActivity() {
         val bridge = AndroidBridge(this, webView)
         webView.addJavascriptInterface(bridge, "AndroidBridge")
 
-        // Load FHM Translate Web bundle
-        webView.loadUrl("file:///android_asset/dist/index.html")
+        // Load FHM Translate Web bundle through secure local asset loader (solves ES Modules CORS in WebView)
+        webView.loadUrl("https://appassets.androidplatform.net/assets/dist/index.html")
     }
 
     fun requestOverlayPermission() {
