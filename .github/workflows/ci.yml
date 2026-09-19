@@ -30,8 +30,10 @@ jobs:
       - name: Build Web App
         run: npm run build
 
-      - name: Sync Android Project
-        run: npx cap sync android
+      - name: Prepare Android Web Assets
+        run: |
+          mkdir -p android/app/src/main/assets/public
+          cp -r dist/. android/app/src/main/assets/public/
 
       - name: Build APK
         working-directory: android
