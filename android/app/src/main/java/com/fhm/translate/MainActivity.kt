@@ -4,12 +4,17 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -28,21 +33,44 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         webView = findViewById(R.id.webView)
+        webView.setBackgroundColor(Color.parseColor("#0F172A"))
+
         val webSettings: WebSettings = webView.settings
         webSettings.javaScriptEnabled = true
         webSettings.domStorageEnabled = true
         webSettings.databaseEnabled = true
         webSettings.mediaPlaybackRequiresUserGesture = false
         webSettings.allowFileAccess = true
+        webSettings.allowContentAccess = true
+        webSettings.allowFileAccessFromFileURLs = true
+        webSettings.allowUniversalAccessFromFileURLs = true
+        webSettings.loadWithOverviewMode = true
+        webSettings.useWideViewPort = true
+        webSettings.cacheMode = WebSettings.LOAD_DEFAULT
 
-        webView.webViewClient = WebViewClient()
-        webView.webChromeClient = WebChromeClient()
+        webView.webViewClient = object : WebViewClient() {
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                super.onReceivedError(view, request, error)
+                Log.e("FHM_WEBVIEW", "WebView error: ${error?.description} on url ${request?.url}")
+            }
+        }
+
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(consoleMessage: ConsoleMessage?): Boolean {
+                Log.d("FHM_JS_CONSOLE", "${consoleMessage?.message()} -- line ${consoleMessage?.lineNumber()}")
+                return super.onConsoleMessage(consoleMessage)
+            }
+        }
 
         // Register the native bridge interface
         val bridge = AndroidBridge(this, webView)
         webView.addJavascriptInterface(bridge, "AndroidBridge")
 
-        // Load FHM Translate Web bundle / local assets
+        // Load FHM Translate Web bundle
         webView.loadUrl("file:///android_asset/dist/index.html")
     }
 
