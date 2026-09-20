@@ -72,6 +72,13 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, request, error)
                 Log.e("FHM_WEBVIEW", "WebView error: ${error?.description} on url ${request?.url}")
+                
+                // Fallback to local file url if virtual domain fails on very old devices
+                if (request?.isForMainFrame == true && request.url.toString().startsWith("https://appassets.androidplatform.net")) {
+                    view?.post {
+                        view.loadUrl("file:///android_asset/dist/index.html")
+                    }
+                }
             }
         }
 
