@@ -91,7 +91,40 @@ export default function App() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // If floating service is enabled on native Android, start service
+    // If native overlay permission is already active in Android, sync permission
+    if (androidBridge.checkOverlayPermission()) {
+      const updatedPerms = savePermission('overlay', true);
+      setPermissions(updatedPerms);
+    }
+
+    // Register Native Bridge Callbacks
+    (window as any).onOverlayPermissionGranted = () => {
+      const updated = savePermission('overlay', true);
+      setPermissions(updated);
+      handleUpdateSettings({ floatingTranslatorEnabled: true });
+      androidBridge.startFloatingService();
+      androidBridge.showToast('Floating 🔵 FHM Translate bubble activated!');
+      setActivePermissionRequest(null);
+    };
+
+    (window as any).onOverlayPermissionDenied = () => {
+      androidBridge.showToast('Overlay permission needed to display floating bubble over other apps');
+      setActivePermissionRequest(null);
+    };
+
+    (window as any).onScreenCaptureStarted = () => {
+      const updated = savePermission('screenCapture', true);
+      setPermissions(updated);
+      setIsScreenOverlayOpen(true);
+      setActivePermissionRequest(null);
+    };
+
+    (window as any).onScreenCaptureDenied = () => {
+      androidBridge.showToast('Screen capture permission was cancelled');
+      setActivePermissionRequest(null);
+    };
+
+    // If floating service is enabled, start service
     if (loadedSettings.floatingTranslatorEnabled) {
       androidBridge.startFloatingService();
     }
@@ -148,14 +181,28 @@ export default function App() {
   // Permission requests
   const requestSpecificPermission = (type: PermissionType): Promise<boolean> => {
     return new Promise((resolve) => {
+      // If already granted, proceed
       if (permissions[type]) {
+        resolve(true);
+        return;
+      }
+
+      // Check native Android overlay permission directly
+      if (type === 'overlay' && androidBridge.checkOverlayPermission()) {
+        const updated = savePermission('overlay', true);
+        setPermissions(updated);
         resolve(true);
         return;
       }
 
       setActivePermissionRequest({
         type,
-        onGranted: () => {
+        onGranted: async () => {
+          if (type === 'overlay') {
+            await androidBridge.requestOverlayPermission();
+          } else if (type === 'screenCapture') {
+            await androidBridge.requestScreenCapture();
+          }
           const updated = savePermission(type, true);
           setPermissions(updated);
           setActivePermissionRequest(null);
@@ -178,8 +225,12 @@ export default function App() {
 
   const handleToggleFloatingBubble = async () => {
     if (!settings.floatingTranslatorEnabled) {
-      const hasPerm = await requestSpecificPermission('overlay');
-      if (!hasPerm) return;
+      // Check overlay permission
+      const hasOverlay = androidBridge.checkOverlayPermission() || permissions.overlay;
+      if (!hasOverlay) {
+        const granted = await requestSpecificPermission('overlay');
+        if (!granted) return;
+      }
       handleUpdateSettings({ floatingTranslatorEnabled: true });
       androidBridge.startFloatingService();
       androidBridge.showToast('Floating 🔵 FHM Translate bubble activated!');

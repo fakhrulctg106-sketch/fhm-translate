@@ -162,13 +162,31 @@ class MainActivity : AppCompatActivity() {
 
     fun requestOverlayPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST_CODE)
+            try {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:$packageName")
+                )
+                startActivityForResult(intent, OVERLAY_PERMISSION_REQUEST_CODE)
+            } catch (e: Exception) {
+                try {
+                    val fallbackIntent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                    startActivityForResult(fallbackIntent, OVERLAY_PERMISSION_REQUEST_CODE)
+                } catch (e2: Exception) {
+                    Toast.makeText(this, "Please enable 'Display over other apps' in Settings", Toast.LENGTH_LONG).show()
+                }
+            }
         } else {
             notifyBridge("onOverlayPermissionGranted()")
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (Settings.canDrawOverlays(this)) {
+                notifyBridge("onOverlayPermissionGranted()")
+            }
         }
     }
 

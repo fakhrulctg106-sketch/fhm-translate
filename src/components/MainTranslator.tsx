@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeftRight,
   Sparkles,
@@ -13,6 +13,7 @@ import {
   BookOpen,
   Clipboard,
   Send,
+  Zap,
 } from 'lucide-react';
 import { Language, UserSettings, TranslationItem } from '../types/translation';
 import { getLanguageByCode } from '../data/languages';
@@ -47,12 +48,81 @@ export const MainTranslator: React.FC<MainTranslatorProps> = ({
   const [isFavorited, setIsFavorited] = useState(false);
   const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
 
-  const handleTranslate = async () => {
-    if (!inputText.trim() || isLoading) return;
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, []);
+
+  // Automatic Instant Live Translation as user types or changes language
+  useEffect(() => {
+    const textToTranslate = inputText.trim();
+
+    if (!textToTranslate) {
+      setTranslationResult(null);
+      setErrorMsg(null);
+      setIsLoading(false);
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      return;
+    }
+
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
 
     setIsLoading(true);
+
+    debounceTimerRef.current = setTimeout(async () => {
+      try {
+        const result = await requestTranslation(
+          textToTranslate,
+          sourceLang.code,
+          targetLang.code
+        );
+
+        if (!isMountedRef.current) return;
+
+        setTranslationResult(result);
+        setErrorMsg(null);
+
+        // Save to History silently
+        const saved = saveHistoryItem({
+          originalText: result.originalText,
+          translatedText: result.translatedText,
+          sourceLang: result.sourceLang,
+          targetLang: result.targetLang,
+          detectedLang: result.detectedLang,
+          detectedLangName: result.detectedLangName,
+          mode: 'text',
+        });
+        setCurrentHistoryId(saved.id);
+      } catch (err: any) {
+        if (!isMountedRef.current) return;
+        console.error('Auto translation error:', err);
+        setErrorMsg(err.message || 'Translation failed. Please check network connection.');
+      } finally {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
+      }
+    }, 380); // 380ms debounce for natural typing speed
+
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [inputText, sourceLang.code, targetLang.code]);
+
+  const handleManualTranslate = async () => {
+    if (!inputText.trim()) return;
+
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    setIsLoading(true);
     setErrorMsg(null);
-    setIsFavorited(false);
 
     try {
       const result = await requestTranslation(
@@ -63,7 +133,6 @@ export const MainTranslator: React.FC<MainTranslatorProps> = ({
 
       setTranslationResult(result);
 
-      // Save to History
       const saved = saveHistoryItem({
         originalText: result.originalText,
         translatedText: result.translatedText,
@@ -75,15 +144,13 @@ export const MainTranslator: React.FC<MainTranslatorProps> = ({
       });
       setCurrentHistoryId(saved.id);
 
-      // Increment ad manager action safely
       adManager.incrementAction();
 
-      // Auto speak if configured in user settings
       if (settings.autoSpeak) {
         androidBridge.speak(result.translatedText, targetLang.code, settings.speechSpeed);
       }
     } catch (err: any) {
-      console.error('Translation error:', err);
+      console.error('Manual translation error:', err);
       setErrorMsg(err.message || 'Translation failed. Please check network connection.');
     } finally {
       setIsLoading(false);
@@ -91,6 +158,7 @@ export const MainTranslator: React.FC<MainTranslatorProps> = ({
   };
 
   const handleClear = () => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     setInputText('');
     setTranslationResult(null);
     setErrorMsg(null);
@@ -224,7 +292,7 @@ export const MainTranslator: React.FC<MainTranslatorProps> = ({
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-              handleTranslate();
+              handleManualTranslate();
             }
           }}
           placeholder={`Enter text in ${sourceLang.name === 'Auto Detect' ? 'any language' : sourceLang.name}...`}
@@ -247,11 +315,17 @@ export const MainTranslator: React.FC<MainTranslatorProps> = ({
             <span className="text-[11px] text-slate-500 font-mono">
               {inputText.length} chars
             </span>
+            {inputText.trim() && (
+              <span className="hidden xs:flex items-center space-x-1 text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                <Zap className="w-2.5 h-2.5 animate-pulse" />
+                <span>Auto-translating</span>
+              </span>
+            )}
           </div>
 
           <button
             id="btn-submit-translate"
-            onClick={handleTranslate}
+            onClick={handleManualTranslate}
             disabled={!inputText.trim() || isLoading}
             className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm shadow-lg shadow-blue-600/30 flex items-center space-x-2 transition-all transform active:scale-95"
           >
@@ -278,7 +352,7 @@ export const MainTranslator: React.FC<MainTranslatorProps> = ({
             <div>{errorMsg}</div>
           </div>
           <button
-            onClick={handleTranslate}
+            onClick={handleManualTranslate}
             className="px-3 py-1.5 rounded-lg bg-rose-600 text-white font-semibold text-xs shrink-0 flex items-center space-x-1"
           >
             <RotateCcw className="w-3.5 h-3.5" />

@@ -23,6 +23,8 @@ declare global {
     onAndroidVoiceResult?: (text: string) => void;
     onOverlayPermissionGranted?: () => void;
     onOverlayPermissionDenied?: () => void;
+    onScreenCaptureStarted?: () => void;
+    onScreenCaptureDenied?: () => void;
   }
 }
 
@@ -56,6 +58,15 @@ class AndroidBridgeService {
     }
     // Web simulation:
     localStorage.setItem('fhm_permission_overlay', 'granted');
+    return true;
+  }
+
+  public async requestScreenCapture(): Promise<boolean> {
+    if (this.isNative() && window.AndroidBridge?.startScreenCapture) {
+      window.AndroidBridge.startScreenCapture();
+      return true;
+    }
+    localStorage.setItem('fhm_permission_screenCapture', 'granted');
     return true;
   }
 

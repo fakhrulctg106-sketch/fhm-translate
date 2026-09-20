@@ -69,12 +69,15 @@ export const VoiceTranslator: React.FC<VoiceTranslatorProps> = ({
         recognition.continuous = false;
         recognition.interimResults = true;
 
+        let accumulatedTranscript = '';
+
         recognition.onresult = (event: any) => {
           let currentTranscript = '';
           for (let i = event.resultIndex; i < event.results.length; i++) {
             currentTranscript += event.results[i][0].transcript;
           }
           if (currentTranscript) {
+            accumulatedTranscript = currentTranscript;
             setTranscript(currentTranscript);
           }
         };
@@ -82,6 +85,10 @@ export const VoiceTranslator: React.FC<VoiceTranslatorProps> = ({
         recognition.onend = () => {
           setIsListening(false);
           isListeningRef.current = false;
+          if (accumulatedTranscript.trim()) {
+            handleProcessVoiceText(accumulatedTranscript.trim(), activeSpeaker);
+            accumulatedTranscript = '';
+          }
         };
 
         recognition.onerror = (e: any) => {
