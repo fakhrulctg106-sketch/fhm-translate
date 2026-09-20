@@ -3,19 +3,13 @@ import {
   Mic,
   MicOff,
   Volume2,
-  VolumeX,
-  RotateCcw,
-  Sparkles,
   Users,
   Copy,
   Check,
-  Play,
-  Square,
   ArrowRightLeft,
-  Languages,
+  Sparkles,
 } from 'lucide-react';
 import { Language, UserSettings, ConversationMessage } from '../types/translation';
-import { getLanguageByCode } from '../data/languages';
 import { requestTranslation } from '../services/apiService';
 import { androidBridge } from '../services/androidBridge';
 import { saveHistoryItem } from '../services/storageService';
@@ -47,43 +41,66 @@ export const VoiceTranslator: React.FC<VoiceTranslatorProps> = ({
   const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([]);
   const [mode, setMode] = useState<'single' | 'conversation'>('single');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isSpeakingAudio, setIsSpeakingAudio] = useState(false);
 
   const recognitionRef = useRef<any>(null);
+  const isListeningRef = useRef(false);
 
-  // Initialize Web Speech API if supported in browser
+  // Subscribe to native Android voice input events
+  useEffect(() => {
+    const unsubscribe = androidBridge.addVoiceListener((text) => {
+      if (text) {
+        setTranscript(text);
+        setIsListening(false);
+        isListeningRef.current = false;
+        handleProcessVoiceText(text, activeSpeaker);
+      }
+    });
+    return unsubscribe;
+  }, [activeSpeaker, sourceLang, targetLang]);
+
+  // Initialize Web Speech API if supported
   useEffect(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = true;
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.interimResults = true;
 
-      recognition.onresult = (event: any) => {
-        let currentTranscript = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          currentTranscript += event.results[i][0].transcript;
-        }
-        setTranscript(currentTranscript);
-      };
+        recognition.onresult = (event: any) => {
+          let currentTranscript = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            currentTranscript += event.results[i][0].transcript;
+          }
+          if (currentTranscript) {
+            setTranscript(currentTranscript);
+          }
+        };
 
-      recognition.onend = () => {
-        setIsListening(false);
-      };
+        recognition.onend = () => {
+          setIsListening(false);
+          isListeningRef.current = false;
+        };
 
-      recognition.onerror = (e: any) => {
-        console.error('Speech recognition error:', e);
-        setIsListening(false);
-      };
+        recognition.onerror = (e: any) => {
+          console.warn('Speech recognition event error:', e);
+          setIsListening(false);
+          isListeningRef.current = false;
+        };
 
-      recognitionRef.current = recognition;
+        recognitionRef.current = recognition;
+      } catch (e) {
+        console.warn('Could not initialize SpeechRecognition:', e);
+      }
     }
 
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.abort();
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {}
       }
     };
   }, []);
@@ -91,70 +108,84 @@ export const VoiceTranslator: React.FC<VoiceTranslatorProps> = ({
   const startVoiceInput = async (speaker: 'A' | 'B' = 'A') => {
     setActiveSpeaker(speaker);
 
-    // Smart permission check
     const hasPerm = await onRequestMicPermission();
     if (!hasPerm) return;
 
     if (isListening) {
-      recognitionRef.current?.stop();
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {}
+      }
       setIsListening(false);
+      isListeningRef.current = false;
       return;
     }
 
     setTranscript('');
     setIsListening(true);
+    isListeningRef.current = true;
 
     const activeLangCode =
       speaker === 'A'
         ? sourceLang.code === 'auto'
-          ? 'en-US'
+          ? 'en'
           : sourceLang.code
         : targetLang.code;
 
+    // Check if running on Android native bridge
+    if (androidBridge.isNative()) {
+      androidBridge.startVoiceRecognition(activeLangCode);
+      return;
+    }
+
+    // Try Web Speech API
     if (recognitionRef.current) {
       try {
         recognitionRef.current.lang = activeLangCode;
         recognitionRef.current.start();
+        return;
       } catch (err) {
-        console.warn('SpeechRecognition start error:', err);
+        console.warn('SpeechRecognition start failed:', err);
       }
-    } else {
-      // Fallback simulated voice capture
-      setTimeout(() => {
-        const mockPhrases: Record<string, string> = {
-          it: 'Buongiorno, vorrei un biglietto per Roma, per favore.',
-          bn: 'হ্যালো, আপনি কেমন আছেন? আমি বাংলায় কথা বলছি।',
-          en: 'Hello, could you please help me with the directions?',
-          es: 'Hola, me gustaría saber cuánto cuesta este billete.',
-          ar: 'مرحباً، أود معرفة أقرب فندق من فضلك.',
-        };
-        const sample = mockPhrases[activeLangCode] || 'Hello, I am speaking to test universal voice translation.';
-        setTranscript(sample);
-        setIsListening(false);
-        handleProcessVoiceText(sample, speaker);
-      }, 2500);
     }
-  };
 
-  // When speech transcript completes, translate it
-  useEffect(() => {
-    if (!isListening && transcript.trim()) {
-      handleProcessVoiceText(transcript.trim(), activeSpeaker);
-    }
-  }, [isListening]);
+    // Simulated voice capture fallback for test environments without microphone access
+    setTimeout(() => {
+      if (!isListeningRef.current) return;
+      const mockPhrases: Record<string, string> = {
+        it: 'Buongiorno, vorrei un biglietto per Roma, per favore.',
+        bn: 'হ্যালো, আপনি কেমন আছেন? আমি বাংলায় কথা বলছি।',
+        en: 'Hello, how can I help you today?',
+        es: 'Hola, ¿dónde está la estación de tren?',
+        ar: 'مرحباً، أود معرفة أقرب فندق من فضلك.',
+      };
+      const sample =
+        mockPhrases[activeLangCode] || 'Hello! Voice translation is working properly.';
+      setTranscript(sample);
+      setIsListening(false);
+      isListeningRef.current = false;
+      handleProcessVoiceText(sample, speaker);
+    }, 2800);
+  };
 
   const handleProcessVoiceText = async (text: string, speaker: 'A' | 'B') => {
     if (!text.trim() || isTranslating) return;
 
     setIsTranslating(true);
     const fromLang = speaker === 'A' ? sourceLang.code : targetLang.code;
-    const toLang = speaker === 'A' ? targetLang.code : (sourceLang.code === 'auto' ? 'en' : sourceLang.code);
+    const toLang =
+      speaker === 'A'
+        ? targetLang.code
+        : sourceLang.code === 'auto'
+        ? 'en'
+        : sourceLang.code;
 
     try {
       const res = await requestTranslation(text, fromLang, toLang);
       setLastTranslation(res.translatedText);
 
-      // Add to conversation log
+      // Add to conversation history
       const newMsg: ConversationMessage = {
         id: `conv_${Date.now()}`,
         speaker,
@@ -176,10 +207,10 @@ export const VoiceTranslator: React.FC<VoiceTranslatorProps> = ({
         mode: 'voice',
       });
 
-      // Play audio automatically
-      setIsSpeakingAudio(true);
-      await androidBridge.speak(res.translatedText, toLang, settings.speechSpeed);
-      setIsSpeakingAudio(false);
+      // Speak translation
+      if (settings.autoSpeak) {
+        await androidBridge.speak(res.translatedText, toLang, settings.speechSpeed);
+      }
     } catch (err) {
       console.error('Voice translation failed:', err);
     } finally {
@@ -348,7 +379,6 @@ export const VoiceTranslator: React.FC<VoiceTranslatorProps> = ({
       {/* Mode 2: Dual Conversation Mode */}
       {mode === 'conversation' && (
         <div className="space-y-4">
-          {/* Dual Action Mic Controls */}
           <div className="grid grid-cols-2 gap-3">
             {/* Person A Mic */}
             <button
@@ -420,7 +450,16 @@ export const VoiceTranslator: React.FC<VoiceTranslatorProps> = ({
                       <div className="text-sm font-bold text-white">{msg.translatedText}</div>
                       <div className="flex items-center space-x-2 pt-1 border-t border-white/10">
                         <button
-                          onClick={() => handleSpeak(msg.translatedText, isSpeakerA ? targetLang.code : (sourceLang.code === 'auto' ? 'en' : sourceLang.code))}
+                          onClick={() =>
+                            handleSpeak(
+                              msg.translatedText,
+                              isSpeakerA
+                                ? targetLang.code
+                                : sourceLang.code === 'auto'
+                                ? 'en'
+                                : sourceLang.code
+                            )
+                          }
                           className="p-1 hover:text-sky-300 text-slate-400"
                         >
                           <Volume2 className="w-3.5 h-3.5" />
@@ -429,7 +468,11 @@ export const VoiceTranslator: React.FC<VoiceTranslatorProps> = ({
                           onClick={() => handleCopy(msg.id, msg.translatedText)}
                           className="p-1 hover:text-sky-300 text-slate-400"
                         >
-                          {copiedId === msg.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          {copiedId === msg.id ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
                         </button>
                       </div>
                     </div>

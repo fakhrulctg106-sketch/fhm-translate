@@ -6,12 +6,9 @@ import {
   Volume2,
   Copy,
   Check,
-  Share2,
-  X,
-  RefreshCw,
-  Eye,
   SwitchCamera,
-  Layers,
+  Upload,
+  AlertCircle,
 } from 'lucide-react';
 import { Language, UserSettings, OCRResult } from '../types/translation';
 import { requestOCRTranslation } from '../services/apiService';
@@ -41,9 +38,11 @@ export const CameraTranslator: React.FC<CameraTranslatorProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [copied, setCopied] = useState(false);
+  const [cameraStreamAvailable, setCameraStreamAvailable] = useState(true);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileCameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     initCamera();
@@ -63,19 +62,24 @@ export const CameraTranslator: React.FC<CameraTranslatorProps> = ({
     }
     setHasPermission(true);
 
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingMode },
-        audio: false,
-      });
-      setStream(mediaStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
+    if (navigator?.mediaDevices?.getUserMedia) {
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: facingMode },
+          audio: false,
+        });
+        setStream(mediaStream);
+        setCameraStreamAvailable(true);
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+        return;
+      } catch (err: any) {
+        console.warn('WebRTC Camera stream not supported or restricted in WebView:', err);
+        setCameraStreamAvailable(false);
       }
-    } catch (err: any) {
-      console.warn('Camera stream error:', err);
-      // Fallback: camera hardware unavailable or blocked
-      setErrorMsg('Camera access is not available or blocked in this browser context.');
+    } else {
+      setCameraStreamAvailable(false);
     }
   };
 
@@ -100,10 +104,25 @@ export const CameraTranslator: React.FC<CameraTranslatorProps> = ({
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     const base64Image = canvas.toDataURL('image/jpeg', 0.85);
 
+    processCapturedBase64(base64Image);
+  };
+
+  const handleFileCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result as string;
+        processCapturedBase64(base64);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const processCapturedBase64 = async (base64Image: string) => {
     setCapturedImage(base64Image);
     stopCameraStream();
 
-    // Process OCR
     setIsProcessing(true);
     setErrorMsg(null);
 
@@ -168,7 +187,7 @@ export const CameraTranslator: React.FC<CameraTranslatorProps> = ({
         </div>
 
         <div className="flex items-center space-x-2">
-          {!capturedImage && (
+          {!capturedImage && cameraStreamAvailable && (
             <button
               onClick={() =>
                 setFacingMode(facingMode === 'environment' ? 'user' : 'environment')
@@ -195,7 +214,7 @@ export const CameraTranslator: React.FC<CameraTranslatorProps> = ({
       {/* Main Viewfinder / Snapshot Box */}
       <div className="relative bg-black rounded-3xl overflow-hidden border border-slate-800 min-h-[360px] max-h-[500px] flex items-center justify-center shadow-2xl">
         {/* Live Camera View */}
-        {!capturedImage && (
+        {!capturedImage && cameraStreamAvailable && (
           <>
             <video
               ref={videoRef}
@@ -212,12 +231,12 @@ export const CameraTranslator: React.FC<CameraTranslatorProps> = ({
                 <span>{targetLang.code.toUpperCase()}</span>
               </div>
               <div className="text-center text-xs text-white/80 bg-black/50 py-1 px-3 rounded-full backdrop-blur-sm self-center">
-                Point camera at foreign text and tap capture
+                Point camera at text & tap capture
               </div>
             </div>
 
             {/* Shutter Capture Button */}
-            <div className="absolute bottom-4 left-0 right-0 flex justify-center">
+            <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-4">
               <button
                 id="btn-camera-capture"
                 onClick={handleCapture}
@@ -227,6 +246,36 @@ export const CameraTranslator: React.FC<CameraTranslatorProps> = ({
               </button>
             </div>
           </>
+        )}
+
+        {/* Fallback Shutter when Live WebRTC is restricted */}
+        {!capturedImage && !cameraStreamAvailable && (
+          <div className="p-8 flex flex-col items-center justify-center text-center space-y-4 max-w-sm">
+            <div className="w-16 h-16 rounded-full bg-blue-600/20 text-blue-400 flex items-center justify-center border border-blue-500/40">
+              <Camera className="w-8 h-8" />
+            </div>
+            <div>
+              <h4 className="font-bold text-white text-base">Direct Camera Photo Capture</h4>
+              <p className="text-xs text-slate-400 mt-1">
+                Tap below to take a photo directly using your Android camera for instant text translation.
+              </p>
+            </div>
+            <button
+              onClick={() => fileCameraInputRef.current?.click()}
+              className="px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm shadow-xl shadow-blue-500/30 flex items-center space-x-2"
+            >
+              <Camera className="w-4 h-4" />
+              <span>Open Android Camera</span>
+            </button>
+            <input
+              ref={fileCameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileCapture}
+              className="hidden"
+            />
+          </div>
         )}
 
         {/* Captured Image Preview + OCR Layer */}
@@ -294,7 +343,7 @@ export const CameraTranslator: React.FC<CameraTranslatorProps> = ({
                 onClick={() => handleCopy(ocrResult.fullTranslatedText)}
                 className="p-1 text-slate-400 hover:text-white"
               >
-                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-slate-400" />}
               </button>
             </div>
           </div>

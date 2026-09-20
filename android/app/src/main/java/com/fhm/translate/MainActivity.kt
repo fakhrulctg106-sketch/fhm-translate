@@ -1,17 +1,22 @@
 package com.fhm.translate
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.speech.RecognizerIntent
 import android.util.Log
 import android.webkit.ConsoleMessage
+import android.webkit.PermissionRequest
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -21,13 +26,21 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.webkit.WebViewAssetLoader
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+    private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
+
     private val OVERLAY_PERMISSION_REQUEST_CODE = 1001
     private val SCREEN_CAPTURE_REQUEST_CODE = 1002
+    private val SPEECH_RECOGNITION_REQUEST_CODE = 1003
+    private val FILE_CHOOSER_REQUEST_CODE = 1004
+    private val RUNTIME_PERMISSIONS_REQUEST_CODE = 1005
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -72,8 +85,8 @@ class MainActivity : AppCompatActivity() {
             ) {
                 super.onReceivedError(view, request, error)
                 Log.e("FHM_WEBVIEW", "WebView error: ${error?.description} on url ${request?.url}")
-                
-                // Fallback to local file url if virtual domain fails on very old devices
+
+                // Fallback to local file url if virtual domain fails on older Android versions
                 if (request?.isForMainFrame == true && request.url.toString().startsWith("https://appassets.androidplatform.net")) {
                     view?.post {
                         view.loadUrl("file:///android_asset/dist/index.html")
@@ -87,14 +100,64 @@ class MainActivity : AppCompatActivity() {
                 Log.d("FHM_JS_CONSOLE", "${consoleMessage?.message()} -- line ${consoleMessage?.lineNumber()}")
                 return super.onConsoleMessage(consoleMessage)
             }
+
+            // Grant WebRTC camera & microphone permissions automatically to the WebView
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                runOnUiThread {
+                    request?.grant(request.resources)
+                }
+            }
+
+            // Handle file and camera upload prompts
+            override fun onShowFileChooser(
+                webView: WebView?,
+                filePathCallback: ValueCallback<Array<Uri>>?,
+                fileChooserParams: FileChooserParams?
+            ): Boolean {
+                fileUploadCallback?.onReceiveValue(null)
+                fileUploadCallback = filePathCallback
+
+                val intent = fileChooserParams?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply {
+                    type = "*/*"
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                }
+                try {
+                    startActivityForResult(intent, FILE_CHOOSER_REQUEST_CODE)
+                } catch (e: Exception) {
+                    fileUploadCallback = null
+                    return false
+                }
+                return true
+            }
         }
 
         // Register the native bridge interface
         val bridge = AndroidBridge(this, webView)
         webView.addJavascriptInterface(bridge, "AndroidBridge")
 
-        // Load FHM Translate Web bundle through secure local asset loader (solves ES Modules CORS in WebView)
+        // Request core permissions on startup
+        checkAndRequestRuntimePermissions()
+
+        // Load FHM Translate Web bundle through secure local asset loader
         webView.loadUrl("https://appassets.androidplatform.net/assets/dist/index.html")
+    }
+
+    fun checkAndRequestRuntimePermissions() {
+        val permissions = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            permissions.add(Manifest.permission.CAMERA)
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            permissions.add(Manifest.permission.RECORD_AUDIO)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        if (permissions.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, permissions.toTypedArray(), RUNTIME_PERMISSIONS_REQUEST_CODE)
+        }
     }
 
     fun requestOverlayPermission() {
@@ -118,8 +181,22 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    fun startSpeechRecognition(langCode: String) {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, langCode)
+            putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak into FHM Translate...")
+        }
+        try {
+            startActivityForResult(intent, SPEECH_RECOGNITION_REQUEST_CODE)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Voice recognition not supported on this device", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+
         if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
                 notifyBridge("onOverlayPermissionGranted()")
@@ -129,7 +206,6 @@ class MainActivity : AppCompatActivity() {
             }
         } else if (requestCode == SCREEN_CAPTURE_REQUEST_CODE) {
             if (resultCode == Activity.RESULT_OK && data != null) {
-                // Start screen capture foreground service with intent data
                 val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
                     putExtra("RESULT_CODE", resultCode)
                     putExtra("DATA_INTENT", data)
@@ -143,12 +219,36 @@ class MainActivity : AppCompatActivity() {
             } else {
                 notifyBridge("onScreenCaptureDenied()")
             }
+        } else if (requestCode == SPEECH_RECOGNITION_REQUEST_CODE) {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                val matches = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                val spokenText = matches?.firstOrNull() ?: ""
+                val cleanText = spokenText.replace("'", "\\'").replace("\n", " ")
+                notifyBridge("onAndroidVoiceResult('$cleanText')")
+            }
+        } else if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
+            if (fileUploadCallback != null) {
+                val result = if (resultCode == Activity.RESULT_OK && data != null) {
+                    val dataString = data.dataString
+                    if (dataString != null) arrayOf(Uri.parse(dataString)) else null
+                } else null
+                fileUploadCallback?.onReceiveValue(result)
+                fileUploadCallback = null
+            }
         }
     }
 
     private fun notifyBridge(jsScript: String) {
         webView.post {
-            webView.evaluateJavascript("window.$jsScript", null)
+            webView.evaluateJavascript("if (window.$jsScript) { window.$jsScript; }", null)
+        }
+    }
+
+    override fun onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
         }
     }
 }

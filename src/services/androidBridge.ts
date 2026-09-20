@@ -13,17 +13,30 @@ declare global {
       stopFloatingBubbleService: () => void;
       updateFloatingPosition: (x: number, y: number) => void;
       startScreenCapture: () => void;
+      startVoiceRecognition: (lang: string) => void;
       requestCameraPermission: () => void;
       requestAudioPermission: () => void;
-      requestNotificationPermission: () => void;
       speakText: (text: string, lang: string, speed: number) => void;
       vibrate: (durationMs: number) => void;
       showToast: (message: string) => void;
     };
+    onAndroidVoiceResult?: (text: string) => void;
+    onOverlayPermissionGranted?: () => void;
+    onOverlayPermissionDenied?: () => void;
   }
 }
 
 class AndroidBridgeService {
+  private voiceListeners: Array<(text: string) => void> = [];
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      window.onAndroidVoiceResult = (text: string) => {
+        this.voiceListeners.forEach((listener) => listener(text));
+      };
+    }
+  }
+
   public isNative(): boolean {
     return Boolean(window.AndroidBridge && window.AndroidBridge.isNativeAndroid?.());
   }
@@ -67,6 +80,19 @@ class AndroidBridgeService {
     }
   }
 
+  public startVoiceRecognition(lang: string = 'en') {
+    if (this.isNative() && window.AndroidBridge?.startVoiceRecognition) {
+      window.AndroidBridge.startVoiceRecognition(lang);
+    }
+  }
+
+  public addVoiceListener(callback: (text: string) => void) {
+    this.voiceListeners.push(callback);
+    return () => {
+      this.voiceListeners = this.voiceListeners.filter((l) => l !== callback);
+    };
+  }
+
   public vibrate(ms = 35) {
     if (this.isNative() && window.AndroidBridge?.vibrate) {
       window.AndroidBridge.vibrate(ms);
@@ -98,7 +124,6 @@ class AndroidBridgeService {
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = speed;
 
-        // Try mapping to suitable BCP 47 tag
         const langMap: Record<string, string> = {
           bn: 'bn-BD',
           it: 'it-IT',
@@ -118,7 +143,6 @@ class AndroidBridgeService {
         };
 
         utterance.lang = langMap[langCode] || langCode;
-
         utterance.onend = () => resolve();
         utterance.onerror = () => resolve();
 

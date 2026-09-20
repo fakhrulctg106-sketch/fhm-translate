@@ -83,6 +83,27 @@ class AndroidBridge(
     }
 
     @JavascriptInterface
+    fun startVoiceRecognition(lang: String) {
+        activity.runOnUiThread {
+            activity.startSpeechRecognition(lang)
+        }
+    }
+
+    @JavascriptInterface
+    fun requestCameraPermission() {
+        activity.runOnUiThread {
+            activity.checkAndRequestRuntimePermissions()
+        }
+    }
+
+    @JavascriptInterface
+    fun requestAudioPermission() {
+        activity.runOnUiThread {
+            activity.checkAndRequestRuntimePermissions()
+        }
+    }
+
+    @JavascriptInterface
     fun speakText(text: String, lang: String, speed: Float) {
         textToSpeech?.let { tts ->
             tts.setSpeechRate(speed)
