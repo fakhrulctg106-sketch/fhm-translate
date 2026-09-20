@@ -5,6 +5,20 @@
 
 ---
 
+## 🤖 GitHub Actions Automated APK Builder (স্বয়ংক্রিয় APK তৈরি ও ডাউনলোড গাইড)
+
+এই প্রজেক্টটিতে **GitHub Actions CI/CD অটোমেশন** যুক্ত করা আছে। আপনি গিটহাবে কোড জমা দিলেই GitHub স্বয়ংক্রিয়ভাবে আপনার জন্য আসল ইনস্টলেবল **`.apk`** ফাইল তৈরি করে দেবে!
+
+### 📥 কিভাবে GitHub থেকে APK ডাউনলোড করবেন:
+1. **GitHub-এ এক্সপোর্ট করুন**: 
+   - Google AI Studio-এর উপরে ডানদিকের মেনু থেকে **Settings -> Export to GitHub**-এ ক্লিক করে আপনার GitHub অ্যাকাউন্টে রিপোজিটরি তৈরি করুন।
+2. **অটোমেটিক বিল্ড শুরু হবে**:
+   - কোড পুশ হওয়ার সাথে সাথে GitHub Actions-এর **"Build and Release FHM Translate Android APK"** ওয়ার্কফ্লোটি স্বয়ংক্রিয়ভাবে চালু হয়ে যাবে (Actions ট্যাবে দেখতে পাবেন)।
+3. **APK ডাউনলোড করুন**:
+   - বিল্ড সম্পন্ন হলে (মাত্র ১-২ মিনিট), আপনার GitHub রিপোজিটরির **"Releases"** সেকশন অথবা **"Actions" -> সর্বশেষ রান -> "Artifacts"** থেকে সরাসরি **`FHM-Translate-v1.0.apk`** ফাইলটি ফোনে ডাউনলোড করে ইনস্টল করে নিতে পারবেন!
+
+---
+
 ## 📱 Features Overview (মূল বৈশিষ্ট্যসমূহ)
 
 - **🔵 Edge-Docked Floating Screen Translator (Hi Translate UX)**:

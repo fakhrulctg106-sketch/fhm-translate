@@ -240,22 +240,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="pt-4 space-y-3">
             <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center space-x-1.5">
               <Download className="w-4 h-4" />
-              <span>Android APK Download</span>
+              <span>Android APK Download (গিটহাব অটোমেটিক বিল্ড)</span>
             </h3>
 
-            <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/80 space-y-2">
+            <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/80 space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-white flex items-center space-x-1.5">
-                  <span>📦 How to get the APK</span>
+                  <span>📦 How to get the APK / কিভাবে APK পাবেন</span>
                 </span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold">
-                  GitHub Actions
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold">
+                  GitHub CI/CD Ready
                 </span>
               </div>
-              <p className="text-[11px] text-slate-300 leading-relaxed">
-                1. Push this project to your <strong>GitHub Repository</strong>.<br />
-                2. GitHub Actions will automatically run the <strong>Build Android APK</strong> workflow.<br />
-                3. Download the generated APK artifact directly from your GitHub <strong>Actions</strong> tab!
+              <p className="text-[11px] text-slate-300 leading-relaxed space-y-1">
+                <span className="block font-medium text-slate-200">১. প্রজেক্টটি GitHub-এ এক্সপোর্ট করুন (Settings &gt; Export to GitHub)।</span>
+                <span className="block text-slate-400">২. GitHub Actions ব্যাকগ্রাউন্ডে স্বয়ংক্রিয়ভাবে <strong>FHM-Translate-v1.0.apk</strong> বিল্ড করে ফেলবে।</span>
+                <span className="block text-slate-400">৩. আপনার GitHub রিপোজিটরির <strong>Releases</strong> বা <strong>Actions &gt; Artifacts</strong> থেকে সরাসরি APK ডাউনলোড করে ফোনে ইনস্টল করুন।</span>
               </p>
             </div>
           </div>

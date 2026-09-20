@@ -3,6 +3,8 @@ name: Build and Release FHM Translate Android APK
 on:
   push:
     branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 permissions:
@@ -23,18 +25,18 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Node.js 22
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
 
-      - name: Install Dependencies
+      - name: Install NPM Dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Build Web Assets
+      - name: Build Web Production Assets
         run: npm run build
 
-      - name: Prepare Android Assets
+      - name: Prepare Android Web Assets
         run: |
           mkdir -p android/app/src/main/assets/public
           mkdir -p android/app/src/main/assets/dist
@@ -42,11 +44,10 @@ jobs:
           cp -r dist/* android/app/src/main/assets/public/
           cp -r dist/* android/app/src/main/assets/dist/
 
-      - name: Setup Gradle
+      - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: '8.5'
-          cache-disabled: true
 
       - name: Build Android Debug APK
         working-directory: android
@@ -56,17 +57,17 @@ jobs:
         run: |
           mkdir -p output_apk
           find android/app/build/outputs/apk/ -name "*.apk" -exec cp {} output_apk/FHM-Translate-v1.0.apk \;
-          echo "APK built successfully:"
+          echo "Generated APK Files:"
           ls -lh output_apk/
 
-      - name: Upload APK to Artifacts
+      - name: Upload APK as GitHub Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: FHM-Translate-APK
+          name: FHM-Translate-Android-APK
           path: output_apk/FHM-Translate-v1.0.apk
           if-no-files-found: error
 
-      - name: Create Direct APK GitHub Release
+      - name: Create Direct GitHub Release with APK
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main') || startsWith(github.ref, 'refs/heads/master')
         with:
@@ -74,10 +75,10 @@ jobs:
           name: FHM Translate v1.0.${{ github.run_number }} (Android APK)
           body: |
             ## 📱 FHM Translate — Universal Screen & Voice Translator
-            **Developer:** Fakhrul Islam
+            **Developer:** Fakhrul Islam (fakhrulctg106@gmail.com)
 
             ### ⬇️ Direct APK Download:
-            Download **`FHM-Translate-v1.0.apk`** directly to your Android device to install and use the app.
+            Download **`FHM-Translate-v1.0.apk`** below directly to your Android phone to install and enjoy the app!
           files: output_apk/FHM-Translate-v1.0.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
