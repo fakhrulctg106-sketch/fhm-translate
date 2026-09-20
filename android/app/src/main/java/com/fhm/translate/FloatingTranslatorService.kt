@@ -34,6 +34,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -88,16 +89,16 @@ class FloatingTranslatorService : Service() {
         
         try {
             createNotificationChannel()
-            if (Build.VERSION.SDK_INT >= 34) { // Android 14+
-                // FOREGROUND_SERVICE_TYPE_SPECIAL_USE = 1073741824
-                startForeground(
-                    NOTIFICATION_ID,
-                    createNotification(),
-                    1073741824
-                )
-            } else {
-                startForeground(NOTIFICATION_ID, createNotification())
-            }
+            val fgsType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            } else 0
+
+            ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                createNotification(),
+                fgsType
+            )
         } catch (e: Exception) {
             Log.e("FHM_FLOAT", "Safe startForeground catch", e)
             try {
@@ -314,7 +315,29 @@ class FloatingTranslatorService : Service() {
             resetIdleTimer()
         } else {
             isMenuOpen = true
+            val density = resources.displayMetrics.density
+            val bubbleWidth = (54 * density).toInt()
+            val menuWidth = (180 * density).toInt()
+
+            val menuParams = menu.layoutParams as? android.widget.FrameLayout.LayoutParams
+            if (dockSide == "right") {
+                menuParams?.gravity = Gravity.TOP or Gravity.END
+                menuParams?.marginStart = 0
+                menuParams?.marginEnd = bubbleWidth + (8 * density).toInt()
+                params?.x = Math.max(0, screenWidth - menuWidth - bubbleWidth - (16 * density).toInt())
+            } else {
+                menuParams?.gravity = Gravity.TOP or Gravity.START
+                menuParams?.marginEnd = 0
+                menuParams?.marginStart = bubbleWidth + (8 * density).toInt()
+                params?.x = 4
+            }
+            menu.layoutParams = menuParams
             menu.visibility = View.VISIBLE
+            try {
+                windowManager?.updateViewLayout(floatingView, params)
+            } catch (e: Exception) {
+                // Ignore
+            }
             handler.removeCallbacks(autoIdleRunnable)
         }
     }
@@ -323,6 +346,16 @@ class FloatingTranslatorService : Service() {
         isMenuOpen = false
         val menu = floatingView?.findViewById<View>(R.id.quickMenuLayout)
         menu?.visibility = View.GONE
+        if (dockSide == "right") {
+            val density = resources.displayMetrics.density
+            val bubbleWidth = floatingView?.findViewById<View>(R.id.fullBubbleLayout)?.width.takeIf { (it ?: 0) > 0 } ?: (54 * density).toInt()
+            params?.x = screenWidth - bubbleWidth - 4
+            try {
+                windowManager?.updateViewLayout(floatingView, params)
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
     }
 
     /**
@@ -446,12 +479,14 @@ class FloatingTranslatorService : Service() {
      * Animate to nearest edge and dock
      */
     private fun snapToNearestEdge(currentX: Int, targetY: Int) {
+        val density = resources.displayMetrics.density
+        val bubbleWidth = floatingView?.findViewById<View>(R.id.fullBubbleLayout)?.width.takeIf { (it ?: 0) > 0 } ?: (54 * density).toInt()
         val targetX = if (currentX < screenWidth / 2) {
             dockSide = "left"
-            0
+            4
         } else {
             dockSide = "right"
-            screenWidth - (floatingView?.width ?: 150)
+            screenWidth - bubbleWidth - 4
         }
 
         val startX = params?.x ?: currentX
@@ -483,10 +518,13 @@ class FloatingTranslatorService : Service() {
         fullBubble?.visibility = View.GONE
         handleView?.visibility = View.VISIBLE
 
+        val density = resources.displayMetrics.density
+        val handleWidth = handleView?.width.takeIf { (it ?: 0) > 0 } ?: (22 * density).toInt()
+
         if (dockSide == "left") {
             params?.x = 0
         } else {
-            params?.x = screenWidth - (handleView?.width ?: 45)
+            params?.x = screenWidth - handleWidth
         }
 
         try {
@@ -504,10 +542,13 @@ class FloatingTranslatorService : Service() {
         handleView?.visibility = View.GONE
         fullBubble?.visibility = View.VISIBLE
 
+        val density = resources.displayMetrics.density
+        val bubbleWidth = fullBubble?.width.takeIf { (it ?: 0) > 0 } ?: (54 * density).toInt()
+
         if (dockSide == "left") {
-            params?.x = 8
+            params?.x = 4
         } else {
-            params?.x = screenWidth - (fullBubble?.width ?: 150) - 8
+            params?.x = screenWidth - bubbleWidth - 4
         }
 
         try {
@@ -533,6 +574,21 @@ class FloatingTranslatorService : Service() {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
+        val density = resources.displayMetrics.density
+        val cardWidthPx = (300 * density).toInt()
+        val cardHeightEstimatePx = (200 * density).toInt()
+        val marginPx = (16 * density).toInt()
+
+        val maxX = Math.max(marginPx, screenWidth - cardWidthPx - marginPx)
+        val posX = Math.max(marginPx, Math.min(maxX, x - (cardWidthPx / 2)))
+
+        val calculatedY = if (y + cardHeightEstimatePx + (60 * density).toInt() > screenHeight) {
+            y - cardHeightEstimatePx - (20 * density).toInt()
+        } else {
+            y + (40 * density).toInt()
+        }
+        val posY = Math.max((40 * density).toInt(), Math.min(screenHeight - cardHeightEstimatePx - (40 * density).toInt(), calculatedY))
+
         resultParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -541,8 +597,8 @@ class FloatingTranslatorService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            this.x = Math.max(20, Math.min(screenWidth - 340, x - 150))
-            this.y = Math.max(80, Math.min(screenHeight - 380, y + 40))
+            this.x = posX
+            this.y = posY
         }
 
         floatingResultView = LayoutInflater.from(this).inflate(R.layout.layout_floating_result_card, null)
