@@ -185,7 +185,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         } else {
-            notifyBridge("onOverlayPermissionGranted()")
+            notifyBridge("onOverlayPermissionGranted")
         }
     }
 
@@ -215,7 +215,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (Settings.canDrawOverlays(this)) {
-                notifyBridge("onOverlayPermissionGranted()")
+                notifyBridge("onOverlayPermissionGranted")
             }
         }
     }
@@ -247,32 +247,37 @@ class MainActivity : AppCompatActivity() {
 
         if (requestCode == OVERLAY_PERMISSION_REQUEST_CODE) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(this)) {
-                notifyBridge("onOverlayPermissionGranted()")
+                notifyBridge("onOverlayPermissionGranted")
             } else {
                 Toast.makeText(this, "Overlay permission is required for the floating translator", Toast.LENGTH_SHORT).show()
-                notifyBridge("onOverlayPermissionDenied()")
+                notifyBridge("onOverlayPermissionDenied")
             }
         } else if (requestCode == SCREEN_CAPTURE_REQUEST_CODE) {
             if (resultCode == Activity.RESULT_OK && data != null) {
-                val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
-                    putExtra("RESULT_CODE", resultCode)
-                    putExtra("DATA_INTENT", data)
+                try {
+                    val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
+                        putExtra("RESULT_CODE", resultCode)
+                        putExtra("DATA_INTENT", data)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(serviceIntent)
+                    } else {
+                        startService(serviceIntent)
+                    }
+                    notifyBridge("onScreenCaptureStarted")
+                } catch (e: Exception) {
+                    Log.e("FHM_MAIN", "Error starting screen capture service", e)
+                    notifyBridge("onScreenCaptureDenied")
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(serviceIntent)
-                } else {
-                    startService(serviceIntent)
-                }
-                notifyBridge("onScreenCaptureStarted()")
             } else {
-                notifyBridge("onScreenCaptureDenied()")
+                notifyBridge("onScreenCaptureDenied")
             }
         } else if (requestCode == SPEECH_RECOGNITION_REQUEST_CODE) {
             if (resultCode == Activity.RESULT_OK && data != null) {
                 val matches = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
                 val spokenText = matches?.firstOrNull() ?: ""
                 val cleanText = spokenText.replace("'", "\\'").replace("\n", " ")
-                notifyBridge("onAndroidVoiceResult('$cleanText')")
+                notifyBridge("onAndroidVoiceResult", cleanText)
             }
         } else if (requestCode == FILE_CHOOSER_REQUEST_CODE) {
             if (fileUploadCallback != null) {
@@ -286,9 +291,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun notifyBridge(jsScript: String) {
+    fun notifyBridge(funcName: String, param: String? = null) {
         webView.post {
-            webView.evaluateJavascript("if (window.$jsScript) { window.$jsScript; }", null)
+            val script = if (param != null) {
+                "if (typeof window['$funcName'] === 'function') { try { window['$funcName']('$param'); } catch(e) { console.error(e); } }"
+            } else {
+                "if (typeof window['$funcName'] === 'function') { try { window['$funcName'](); } catch(e) { console.error(e); } }"
+            }
+            webView.evaluateJavascript(script, null)
         }
     }
 

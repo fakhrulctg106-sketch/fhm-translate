@@ -78,33 +78,57 @@ class AndroidBridge(
 
     @JavascriptInterface
     fun startFloatingBubbleService(x: Int, y: Int, size: String, targetLang: String = "bn") {
-        val intent = Intent(activity, FloatingTranslatorService::class.java).apply {
-            putExtra("INITIAL_X", x)
-            putExtra("INITIAL_Y", y)
-            putExtra("SIZE", size)
-            putExtra("TARGET_LANG", targetLang)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            activity.startForegroundService(intent)
-        } else {
-            activity.startService(intent)
+        activity.runOnUiThread {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(activity)) {
+                    Toast.makeText(activity, "প্রথমে 'Display over other apps' অনুমতি দিন", Toast.LENGTH_SHORT).show()
+                    activity.requestOverlayPermission()
+                    return@runOnUiThread
+                }
+                val intent = Intent(activity, FloatingTranslatorService::class.java).apply {
+                    putExtra("INITIAL_X", x)
+                    putExtra("INITIAL_Y", y)
+                    putExtra("SIZE", size)
+                    putExtra("TARGET_LANG", targetLang)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    activity.startForegroundService(intent)
+                } else {
+                    activity.startService(intent)
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("FHM_BRIDGE", "Failed to start floating service", e)
+                Toast.makeText(activity, "সার্ভিস শুরু করা সম্ভব হয়নি: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
     @JavascriptInterface
     fun stopFloatingBubbleService() {
-        val intent = Intent(activity, FloatingTranslatorService::class.java)
-        activity.stopService(intent)
+        activity.runOnUiThread {
+            try {
+                val intent = Intent(activity, FloatingTranslatorService::class.java)
+                activity.stopService(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("FHM_BRIDGE", "Failed to stop floating service", e)
+            }
+        }
     }
 
     @JavascriptInterface
     fun updateFloatingPosition(x: Int, y: Int) {
-        val intent = Intent(activity, FloatingTranslatorService::class.java).apply {
-            action = "UPDATE_POSITION"
-            putExtra("POS_X", x)
-            putExtra("POS_Y", y)
+        activity.runOnUiThread {
+            try {
+                val intent = Intent(activity, FloatingTranslatorService::class.java).apply {
+                    action = "UPDATE_POSITION"
+                    putExtra("POS_X", x)
+                    putExtra("POS_Y", y)
+                }
+                activity.startService(intent)
+            } catch (e: Exception) {
+                // Ignore
+            }
         }
-        activity.startService(intent)
     }
 
     @JavascriptInterface

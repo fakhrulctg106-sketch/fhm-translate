@@ -47,17 +47,46 @@ class FhmAccessibilityService : AccessibilityService() {
      * Matches the exact point where user released or pointed the floating lens
      */
     fun extractTextAt(dropX: Int, dropY: Int): String? {
-        val root = rootInActiveWindow ?: return null
-        val bestNode = findBestNode(root, dropX, dropY)
-        val text = bestNode?.text?.toString() ?: bestNode?.contentDescription?.toString()
-        if (!text.isNullOrBlank()) {
-            return text.trim()
-        }
+        try {
+            val root = rootInActiveWindow
+            if (root != null) {
+                val bestNode = findBestNode(root, dropX, dropY)
+                val text = bestNode?.text?.toString() ?: bestNode?.contentDescription?.toString()
+                if (!text.isNullOrBlank()) {
+                    return text.trim()
+                }
 
-        // If exact point didn't hit text, look at all active window nodes in the vicinity
-        val nearbyNode = findNearbyNode(root, dropX, dropY)
-        val nearbyText = nearbyNode?.text?.toString() ?: nearbyNode?.contentDescription?.toString()
-        return nearbyText?.trim()
+                // If exact point didn't hit text, look at all active window nodes in the vicinity
+                val nearbyNode = findNearbyNode(root, dropX, dropY)
+                val nearbyText = nearbyNode?.text?.toString() ?: nearbyNode?.contentDescription?.toString()
+                if (!nearbyText.isNullOrBlank()) {
+                    return nearbyText.trim()
+                }
+            }
+
+            // Fallback: Check other windows if rootInActiveWindow had no text or was null
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                val winList = windows
+                if (winList != null) {
+                    for (window in winList) {
+                        val winRoot = window.root ?: continue
+                        val bestNode = findBestNode(winRoot, dropX, dropY)
+                        val text = bestNode?.text?.toString() ?: bestNode?.contentDescription?.toString()
+                        if (!text.isNullOrBlank()) {
+                            return text.trim()
+                        }
+                        val nearbyNode = findNearbyNode(winRoot, dropX, dropY)
+                        val nearbyText = nearbyNode?.text?.toString() ?: nearbyNode?.contentDescription?.toString()
+                        if (!nearbyText.isNullOrBlank()) {
+                            return nearbyText.trim()
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FHM_ACCESSIBILITY", "Error in extractTextAt", e)
+        }
+        return null
     }
 
     /**
@@ -125,20 +154,36 @@ class FhmAccessibilityService : AccessibilityService() {
      * Extract all visible text blocks on screen for Full Screen Translation
      */
     fun extractAllScreenTexts(): List<String> {
-        val root = rootInActiveWindow ?: return emptyList()
         val results = mutableListOf<String>()
-        collectAllTexts(root, results)
+        try {
+            val root = rootInActiveWindow
+            if (root != null) {
+                collectAllTexts(root, results)
+            }
+            if (results.isEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                windows?.forEach { win ->
+                    win.root?.let { collectAllTexts(it, results) }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FHM_ACCESSIBILITY", "extractAllScreenTexts error", e)
+        }
         return results
     }
 
     private fun collectAllTexts(node: AccessibilityNodeInfo?, list: MutableList<String>) {
         if (node == null) return
-        val text = node.text?.toString() ?: node.contentDescription?.toString()
-        if (!text.isNullOrBlank() && text.length > 1 && !list.contains(text.trim())) {
-            list.add(text.trim())
-        }
-        for (i in 0 until node.childCount) {
-            collectAllTexts(node.getChild(i), list)
+        try {
+            val text = node.text?.toString() ?: node.contentDescription?.toString()
+            if (!text.isNullOrBlank() && text.length > 1 && !list.contains(text.trim())) {
+                list.add(text.trim())
+            }
+            for (i in 0 until node.childCount) {
+                val child = node.getChild(i)
+                collectAllTexts(child, list)
+            }
+        } catch (e: Exception) {
+            // Ignore recycling exceptions
         }
     }
 }

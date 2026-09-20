@@ -49,27 +49,29 @@
             android:background="@drawable/bg_indicator_active" />
     </RelativeLayout>
 
-    <!-- 2. Small Ergonomic Edge Handle (When idle at screen edge - Hi Translate style) -->
+    <!-- 2. Ergonomic Edge Handle (When idle at screen edge - Hi Translate style) -->
     <LinearLayout
         android:id="@+id/collapsedHandle"
-        android:layout_width="16dp"
-        android:layout_height="64dp"
+        android:layout_width="26dp"
+        android:layout_height="68dp"
         android:background="@drawable/bg_collapsed_handle"
         android:elevation="12dp"
         android:gravity="center"
         android:orientation="vertical"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
         android:visibility="gone">
 
         <!-- Visual grip indicators -->
         <View
-            android:layout_width="3dp"
-            android:layout_height="14dp"
+            android:layout_width="4dp"
+            android:layout_height="16dp"
             android:background="@drawable/bg_grip_bar" />
 
         <View
-            android:layout_width="3dp"
-            android:layout_height="14dp"
-            android:layout_marginTop="3dp"
+            android:layout_width="4dp"
+            android:layout_height="16dp"
+            android:layout_marginTop="4dp"
             android:background="@drawable/bg_grip_bar" />
     </LinearLayout>
 

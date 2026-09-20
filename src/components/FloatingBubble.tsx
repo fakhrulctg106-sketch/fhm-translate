@@ -227,14 +227,11 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
     clearIdleTimer();
     setIsDragging(true);
     setHasMoved(false);
-    setBubbleState('dragging');
 
-    // If starting from semi-hidden edge handle, calculate centered position
     let startPosX = position.x;
     if (bubbleState === 'semi_hidden') {
       const screenWidth = window.innerWidth;
       startPosX = dockSide === 'left' ? 4 : screenWidth - 60;
-      setPosition((prev) => ({ ...prev, x: startPosX }));
     }
 
     dragStartRef.current = {
@@ -250,19 +247,24 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
 
     const dx = clientX - dragStartRef.current.clientX;
     const dy = clientY - dragStartRef.current.clientY;
+    const dist = Math.hypot(dx, dy);
 
-    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-      setHasMoved(true);
+    // Only switch to dragging mode if moved beyond intentional touch threshold (16px)
+    if (dist > 16) {
+      if (!hasMoved) {
+        setHasMoved(true);
+        setBubbleState('dragging');
+      }
+
+      const maxX = window.innerWidth - 56;
+      const maxY = window.innerHeight - 66;
+
+      const newX = Math.max(0, Math.min(maxX, dragStartRef.current.posX + dx));
+      const newY = Math.max(50, Math.min(maxY, dragStartRef.current.posY + dy));
+
+      setPosition({ x: newX, y: newY });
+      setTargetReticlePos({ x: clientX, y: clientY });
     }
-
-    const maxX = window.innerWidth - 56;
-    const maxY = window.innerHeight - 66;
-
-    const newX = Math.max(0, Math.min(maxX, dragStartRef.current.posX + dx));
-    const newY = Math.max(50, Math.min(maxY, dragStartRef.current.posY + dy));
-
-    setPosition({ x: newX, y: newY });
-    setTargetReticlePos({ x: clientX, y: clientY });
   };
 
   const handleEndDrag = (clientX: number, clientY: number) => {
@@ -271,10 +273,10 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
     setTargetReticlePos(null);
 
     if (hasMoved) {
-      // Released over target area -> single OCR translation action
+      // Released over target text -> extract and translate
       handleDropTranslation(clientX, clientY);
     } else {
-      // Tap on edge handle restores full circular bubble and opens options
+      // Clean tap -> pull out bubble and open quick actions modal
       setBubbleState('docked');
       startIdleTimer();
       onOpenControls();
@@ -370,7 +372,7 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
 
       {/* 2. Hi Translate Reference Edge Handle & Floating Button */}
       {isSemiHidden ? (
-        /* Semi-transparent rounded edge handle (NO text, subtle rounded vertical pill at screen edge) */
+        /* Semi-transparent rounded edge handle (Hi Translate style ergonomic handle) */
         <div
           id="fhm-floating-edge-handle"
           style={{
@@ -378,25 +380,32 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
             [dockSide === 'left' ? 'left' : 'right']: '0px',
             touchAction: 'none',
           }}
-          className={`fixed pointer-events-auto z-50 cursor-grab active:cursor-grabbing transition-transform active:scale-95 ${
-            dockSide === 'left' ? 'pl-0 pr-2' : 'pr-0 pl-2'
+          className={`fixed pointer-events-auto z-50 cursor-grab active:cursor-grabbing transition-transform active:scale-95 flex items-center ${
+            dockSide === 'left' ? 'pl-0 pr-1' : 'pr-0 pl-1'
           }`}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
           onMouseDown={onMouseDown}
-          title="Drag to pull FHM Translator out"
+          onClick={() => {
+            if (!hasMoved) {
+              setBubbleState('docked');
+              startIdleTimer();
+              onOpenControls();
+            }
+          }}
+          title="টান দিন বা চাপুন: FHM Screen Translator"
         >
           <div
-            className={`w-5 sm:w-4.5 h-16 bg-gradient-to-b from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white backdrop-blur-md border border-sky-300/60 shadow-xl shadow-blue-900/60 flex flex-col items-center justify-center space-y-1 transition-all ${
+            className={`w-7 sm:w-6 h-18 bg-gradient-to-b from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 text-white backdrop-blur-md border border-sky-300/80 shadow-2xl shadow-blue-900/80 flex flex-col items-center justify-center space-y-1.5 transition-all ${
               dockSide === 'left'
-                ? 'rounded-r-2xl border-l-0 shadow-[4px_0_12px_rgba(37,99,235,0.4)]'
-                : 'rounded-l-2xl border-r-0 shadow-[-4px_0_12px_rgba(37,99,235,0.4)]'
+                ? 'rounded-r-2xl border-l-0 shadow-[4px_0_16px_rgba(37,99,235,0.6)]'
+                : 'rounded-l-2xl border-r-0 shadow-[-4px_0_16px_rgba(37,99,235,0.6)]'
             }`}
           >
-            {/* Subtle inner grip bars */}
-            <div className="w-1 h-3 rounded-full bg-white/90" />
-            <div className="w-1 h-3 rounded-full bg-white/60" />
+            {/* Subtle inner grip bars and indicator */}
+            <div className="w-1.5 h-3.5 rounded-full bg-white/90 shadow-sm" />
+            <div className="w-1.5 h-3.5 rounded-full bg-sky-200/80 shadow-sm" />
           </div>
         </div>
       ) : (

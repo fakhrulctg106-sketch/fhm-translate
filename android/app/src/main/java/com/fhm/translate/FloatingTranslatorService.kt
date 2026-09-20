@@ -11,8 +11,10 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.graphics.Point
+import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -32,6 +34,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -83,18 +86,48 @@ class FloatingTranslatorService : Service() {
     @SuppressLint("InflateParams", "ClickableViewAccessibility")
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification())
+        
+        try {
+            createNotificationChannel()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ServiceCompat.startForeground(
+                    this,
+                    NOTIFICATION_ID,
+                    createNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, createNotification())
+            }
+        } catch (e: Exception) {
+            Log.e("FHM_FLOAT", "Safe startForeground catch", e)
+            try {
+                startForeground(NOTIFICATION_ID, createNotification())
+            } catch (e2: Exception) {
+                Log.e("FHM_FLOAT", "startForeground failed completely", e2)
+            }
+        }
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         updateScreenDimensions()
 
         // Init Text to Speech for instant voice reading
-        textToSpeech = TextToSpeech(applicationContext) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                textToSpeech?.language = Locale.forLanguageTag(targetLangCode)
+        try {
+            textToSpeech = TextToSpeech(applicationContext) { status ->
+                if (status == TextToSpeech.SUCCESS) {
+                    textToSpeech?.language = Locale.forLanguageTag(targetLangCode)
+                }
             }
+        } catch (e: Exception) {
+            Log.e("FHM_FLOAT", "TTS init error", e)
+        }
+
+        // Verify overlay permission before adding view to prevent WindowManager BadTokenException crash
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            Log.w("FHM_FLOAT", "Overlay permission not granted. Stopping service cleanly.")
+            stopSelf()
+            return
         }
 
         val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -113,12 +146,18 @@ class FloatingTranslatorService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 0
+            x = 8
             y = screenHeight / 3
         }
 
-        floatingView = LayoutInflater.from(this).inflate(R.layout.layout_floating_bubble, null)
-        windowManager?.addView(floatingView, params)
+        try {
+            floatingView = LayoutInflater.from(this).inflate(R.layout.layout_floating_bubble, null)
+            windowManager?.addView(floatingView, params)
+        } catch (e: Exception) {
+            Log.e("FHM_FLOAT", "Failed to add floating view to WindowManager", e)
+            stopSelf()
+            return
+        }
 
         setupTouchGestureListener()
         setupQuickMenuListeners()
@@ -144,28 +183,59 @@ class FloatingTranslatorService : Service() {
             private var hasMoved = false
 
             override fun onTouch(v: View?, event: MotionEvent?): Boolean {
-                when (event?.action) {
+                val action = event?.action ?: return false
+                val rawX = event.rawX
+                val rawY = event.rawY
+
+                // 1. If quick menu is open, let clicks inside quick menu layout pass to child buttons
+                if (isMenuOpen) {
+                    val menu = floatingView?.findViewById<View>(R.id.quickMenuLayout)
+                    if (menu != null && menu.visibility == View.VISIBLE) {
+                        val location = IntArray(2)
+                        menu.getLocationOnScreen(location)
+                        val menuRect = Rect(
+                            location[0],
+                            location[1],
+                            location[0] + menu.width,
+                            location[1] + menu.height
+                        )
+                        if (menuRect.contains(rawX.toInt(), rawY.toInt())) {
+                            // Let the child button receive the touch event and execute its OnClickListener!
+                            return false
+                        }
+                    }
+
+                    // Tapped outside the open menu -> close it
+                    if (action == MotionEvent.ACTION_DOWN) {
+                        closeQuickMenu()
+                        resetIdleTimer()
+                        return true
+                    }
+                }
+
+                when (action) {
                     MotionEvent.ACTION_DOWN -> {
                         handler.removeCallbacks(autoIdleRunnable)
                         initialX = params?.x ?: 0
                         initialY = params?.y ?: 0
-                        initialTouchX = event.rawX
-                        initialTouchY = event.rawY
+                        initialTouchX = rawX
+                        initialTouchY = rawY
                         hasMoved = false
                         isDragging = true
 
                         // Pull complete circular button out immediately on touch
                         if (isSemiHidden) {
                             restoreFullCircularButton()
+                            initialX = params?.x ?: 0
                         }
                         return true
                     }
 
                     MotionEvent.ACTION_MOVE -> {
-                        val dx = (event.rawX - initialTouchX).toInt()
-                        val dy = (event.rawY - initialTouchY).toInt()
+                        val dx = (rawX - initialTouchX).toInt()
+                        val dy = (rawY - initialTouchY).toInt()
 
-                        if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
+                        if (Math.abs(dx) > 15 || Math.abs(dy) > 15) {
                             hasMoved = true
                             closeQuickMenu()
                         }
@@ -182,8 +252,8 @@ class FloatingTranslatorService : Service() {
 
                     MotionEvent.ACTION_UP -> {
                         isDragging = false
-                        val dropX = event.rawX.toInt()
-                        val dropY = event.rawY.toInt()
+                        val dropX = rawX.toInt()
+                        val dropY = rawY.toInt()
 
                         if (hasMoved) {
                             // Released over text -> extract and translate text right here
@@ -503,7 +573,11 @@ class FloatingTranslatorService : Service() {
             Toast.makeText(this, "অনুবাদ কপি করা হয়েছে", Toast.LENGTH_SHORT).show()
         }
 
-        windowManager?.addView(floatingResultView, resultParams)
+        try {
+            windowManager?.addView(floatingResultView, resultParams)
+        } catch (e: Exception) {
+            Log.e("FHM_FLOAT", "Failed to add floatingResultView", e)
+        }
 
         handler.removeCallbacks(autoDismissResultRunnable)
         handler.postDelayed(autoDismissResultRunnable, 14000)
