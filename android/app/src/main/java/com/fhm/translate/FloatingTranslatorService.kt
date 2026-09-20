@@ -34,7 +34,6 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
-import androidx.core.app.ServiceCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -89,12 +88,12 @@ class FloatingTranslatorService : Service() {
         
         try {
             createNotificationChannel()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                ServiceCompat.startForeground(
-                    this,
+            if (Build.VERSION.SDK_INT >= 34) { // Android 14+
+                // FOREGROUND_SERVICE_TYPE_SPECIAL_USE = 1073741824
+                startForeground(
                     NOTIFICATION_ID,
                     createNotification(),
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                    1073741824
                 )
             } else {
                 startForeground(NOTIFICATION_ID, createNotification())
@@ -104,7 +103,7 @@ class FloatingTranslatorService : Service() {
             try {
                 startForeground(NOTIFICATION_ID, createNotification())
             } catch (e2: Exception) {
-                Log.e("FHM_FLOAT", "startForeground failed completely", e2)
+                Log.e("FHM_FLOAT", "startForeground fallback failed", e2)
             }
         }
 

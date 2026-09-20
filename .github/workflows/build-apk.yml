@@ -44,6 +44,13 @@ jobs:
           cp -r dist/* android/app/src/main/assets/public/
           cp -r dist/* android/app/src/main/assets/dist/
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | sdkmanager --licenses || true
+
       - name: Setup Gradle 8.5
         uses: gradle/actions/setup-gradle@v3
         with:
