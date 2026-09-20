@@ -7,6 +7,8 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
@@ -15,18 +17,30 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.provider.Settings
+import android.speech.tts.TextToSpeech
+import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
+import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import java.util.Locale
 
 /**
- * FHM Translate - Native Android Edge-Docked Floating Screen Translator Service
- * Hi Translate Reference UX Implementation
+ * FHM Translate - Native Android Floating Screen Translator Service
+ * Hi Translate Reference Architecture
  * Developer: Fakhrul Islam
  */
 class FloatingTranslatorService : Service() {
@@ -40,16 +54,24 @@ class FloatingTranslatorService : Service() {
     private val CHANNEL_ID = "FHM_FLOATING_CHANNEL"
     private val NOTIFICATION_ID = 2001
 
+    private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
+    private var textToSpeech: TextToSpeech? = null
+    private var vibrator: Vibrator? = null
+
     // State & Timers
     private val handler = Handler(Looper.getMainLooper())
     private var isSemiHidden = false
     private var isDragging = false
+    private var isMenuOpen = false
     private var screenWidth = 1080
     private var screenHeight = 1920
     private var dockSide: String = "left" // "left" or "right"
+    private var targetLangCode = "bn"
 
     private val autoIdleRunnable = Runnable {
-        dockToEdgeHandle()
+        if (!isMenuOpen) {
+            dockToEdgeHandle()
+        }
     }
 
     private val autoDismissResultRunnable = Runnable {
@@ -65,7 +87,15 @@ class FloatingTranslatorService : Service() {
         startForeground(NOTIFICATION_ID, createNotification())
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         updateScreenDimensions()
+
+        // Init Text to Speech for instant voice reading
+        textToSpeech = TextToSpeech(applicationContext) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                textToSpeech?.language = Locale.forLanguageTag(targetLangCode)
+            }
+        }
 
         val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -84,13 +114,14 @@ class FloatingTranslatorService : Service() {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
             x = 0
-            y = screenHeight / 4
+            y = screenHeight / 3
         }
 
         floatingView = LayoutInflater.from(this).inflate(R.layout.layout_floating_bubble, null)
         windowManager?.addView(floatingView, params)
 
         setupTouchGestureListener()
+        setupQuickMenuListeners()
         resetIdleTimer()
     }
 
@@ -134,8 +165,9 @@ class FloatingTranslatorService : Service() {
                         val dx = (event.rawX - initialTouchX).toInt()
                         val dy = (event.rawY - initialTouchY).toInt()
 
-                        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                        if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
                             hasMoved = true
+                            closeQuickMenu()
                         }
 
                         params?.x = initialX + dx
@@ -143,7 +175,7 @@ class FloatingTranslatorService : Service() {
                         try {
                             windowManager?.updateViewLayout(floatingView, params)
                         } catch (e: Exception) {
-                            // Layout exception guard
+                            Log.e("FHM_FLOAT", "View layout error", e)
                         }
                         return true
                     }
@@ -154,15 +186,14 @@ class FloatingTranslatorService : Service() {
                         val dropY = event.rawY.toInt()
 
                         if (hasMoved) {
-                            // Released over target text -> single-shot OCR & localized screen translation
-                            performDropTranslation(dropX, dropY)
+                            // Released over text -> extract and translate text right here
+                            triggerHaptic()
+                            performRealScreenTranslation(dropX, dropY)
+                            snapToNearestEdge(dropX, params?.y ?: initialY)
                         } else {
-                            // Single tap -> open floating options panel
-                            openFloatingControls()
+                            // Single tap -> toggle quick menu right here, NEVER force-open MainActivity
+                            toggleQuickMenu()
                         }
-
-                        // Snap to nearest edge
-                        snapToNearestEdge(dropX, params?.y ?: initialY)
                         return true
                     }
                 }
@@ -171,8 +202,179 @@ class FloatingTranslatorService : Service() {
         })
     }
 
+    private fun setupQuickMenuListeners() {
+        val menu = floatingView?.findViewById<View>(R.id.quickMenuLayout) ?: return
+
+        // 1. Global Screen Translate
+        menu.findViewById<View>(R.id.menuGlobalTranslate)?.setOnClickListener {
+            closeQuickMenu()
+            triggerHaptic()
+            performGlobalScreenTranslate()
+        }
+
+        // 2. Aim & Translate Info
+        menu.findViewById<View>(R.id.menuAimTranslate)?.setOnClickListener {
+            closeQuickMenu()
+            Toast.makeText(
+                this,
+                "🔍 বাবলটি আঙুল দিয়ে টেনে যেকোনো লেখার ওপর ছেড়ে দিন",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+
+        // 3. Open Main App
+        menu.findViewById<View>(R.id.menuOpenMainApp)?.setOnClickListener {
+            closeQuickMenu()
+            val openIntent = Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+            startActivity(openIntent)
+        }
+
+        // 4. Close Floating Bubble
+        menu.findViewById<View>(R.id.menuCloseFloating)?.setOnClickListener {
+            closeQuickMenu()
+            stopSelf()
+        }
+    }
+
+    private fun toggleQuickMenu() {
+        val menu = floatingView?.findViewById<View>(R.id.quickMenuLayout) ?: return
+        if (isMenuOpen) {
+            closeQuickMenu()
+            resetIdleTimer()
+        } else {
+            isMenuOpen = true
+            menu.visibility = View.VISIBLE
+            handler.removeCallbacks(autoIdleRunnable)
+        }
+    }
+
+    private fun closeQuickMenu() {
+        isMenuOpen = false
+        val menu = floatingView?.findViewById<View>(R.id.quickMenuLayout)
+        menu?.visibility = View.GONE
+    }
+
     /**
-     * Smoothly animate button to nearest edge and keep full circle initially
+     * Perform real translation at (dropX, dropY)
+     * Uses FhmAccessibilityService to inspect exact node under finger
+     */
+    private fun performRealScreenTranslation(dropX: Int, dropY: Int) {
+        val accessibility = FhmAccessibilityService.instance
+
+        if (accessibility == null) {
+            // Accessibility service is not enabled yet
+            showAccessibilityRequiredCard(dropX, dropY)
+            return
+        }
+
+        // Show immediate loading indicator card
+        showFloatingResultOverlay(dropX, dropY, "স্ক্রিন থেকে টেক্সট পড়া হচ্ছে...", "Detecting text under lens...")
+
+        serviceScope.launch {
+            val extractedText = accessibility.extractTextAt(dropX, dropY)
+            if (extractedText.isNullOrBlank()) {
+                showFloatingResultOverlay(
+                    dropX, dropY,
+                    "কোনো টেক্সট পাওয়া যায়নি। বাবলটি সরাসরি লেখার ওপর টেনে ধরুন।",
+                    "No text found at coordinates ($dropX, $dropY)"
+                )
+                return@launch
+            }
+
+            // Real Google Translate call in background
+            val result = TranslationHelper.translate(
+                text = extractedText,
+                targetLang = targetLangCode,
+                sourceLang = "auto"
+            )
+
+            showFloatingResultOverlay(
+                dropX, dropY,
+                result.translatedText,
+                result.originalText
+            )
+        }
+    }
+
+    /**
+     * Global Screen Translation (Translates all visible text nodes on screen)
+     */
+    private fun performGlobalScreenTranslate() {
+        val accessibility = FhmAccessibilityService.instance
+        if (accessibility == null) {
+            showAccessibilityRequiredCard(screenWidth / 2, screenHeight / 3)
+            return
+        }
+
+        showFloatingResultOverlay(
+            screenWidth / 2, screenHeight / 3,
+            "পুরো স্ক্রিনের টেক্সট স্ক্যান ও অনুবাদ করা হচ্ছে...",
+            "Scanning all visible text nodes..."
+        )
+
+        serviceScope.launch {
+            val allTexts = accessibility.extractAllScreenTexts()
+            if (allTexts.isEmpty()) {
+                showFloatingResultOverlay(
+                    screenWidth / 2, screenHeight / 3,
+                    "স্ক্রিনে কোনো পাঠযোগ্য লেখা পাওয়া যায়নি।",
+                    "No text detected on screen."
+                )
+                return@launch
+            }
+
+            val combinedText = allTexts.take(8).joinToString("\n• ")
+            val result = TranslationHelper.translate(
+                text = combinedText,
+                targetLang = targetLangCode,
+                sourceLang = "auto"
+            )
+
+            showFloatingResultOverlay(
+                screenWidth / 2, screenHeight / 3,
+                result.translatedText,
+                "অনুবাদকৃত স্ক্রিন টেক্সট:"
+            )
+        }
+    }
+
+    /**
+     * Show friendly card guiding user to turn on Accessibility service (Hi Translate requirement)
+     */
+    private fun showAccessibilityRequiredCard(x: Int, y: Int) {
+        showFloatingResultOverlay(
+            x, y,
+            "অন্যান্য সব অ্যাপের (WhatsApp, Facebook, ইত্যাদি) লেখা পড়তে 'FHM Translate' এর অ্যাক্সেসিবিলিটি সার্ভিস অন করুন।",
+            "Accessibility Service Required"
+        )
+
+        val btnSpeak = floatingResultView?.findViewById<View>(R.id.btnSpeakResult)
+        val tvSpeak = btnSpeak?.findViewById<TextView>(R.id.tvResultText)
+        btnSpeak?.setOnClickListener {
+            openAccessibilitySettings()
+        }
+    }
+
+    private fun openAccessibilitySettings() {
+        try {
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+            Toast.makeText(
+                this,
+                "তালিকা থেকে 'FHM Translate' খুঁজে নিয়ে অন (Allow) করুন",
+                Toast.LENGTH_LONG
+            ).show()
+        } catch (e: Exception) {
+            Log.e("FHM_FLOAT", "Cannot open accessibility settings", e)
+        }
+    }
+
+    /**
+     * Animate to nearest edge and dock
      */
     private fun snapToNearestEdge(currentX: Int, targetY: Int) {
         val targetX = if (currentX < screenWidth / 2) {
@@ -202,11 +404,8 @@ class FloatingTranslatorService : Service() {
         resetIdleTimer()
     }
 
-    /**
-     * Slide mostly inside the edge, showing only the subtle rounded handle (no text)
-     */
     private fun dockToEdgeHandle() {
-        if (isDragging || isSemiHidden) return
+        if (isDragging || isSemiHidden || isMenuOpen) return
         isSemiHidden = true
 
         val fullBubble = floatingView?.findViewById<View>(R.id.fullBubbleLayout)
@@ -218,7 +417,7 @@ class FloatingTranslatorService : Service() {
         if (dockSide == "left") {
             params?.x = 0
         } else {
-            params?.x = screenWidth - (handleView?.width ?: 40)
+            params?.x = screenWidth - (handleView?.width ?: 45)
         }
 
         try {
@@ -228,9 +427,6 @@ class FloatingTranslatorService : Service() {
         }
     }
 
-    /**
-     * Restore full circular button smoothly when touched
-     */
     private fun restoreFullCircularButton() {
         isSemiHidden = false
         val fullBubble = floatingView?.findViewById<View>(R.id.fullBubbleLayout)
@@ -254,24 +450,11 @@ class FloatingTranslatorService : Service() {
 
     private fun resetIdleTimer() {
         handler.removeCallbacks(autoIdleRunnable)
-        handler.postDelayed(autoIdleRunnable, 3000) // 3 seconds
-    }
-
-    /**
-     * Single-shot OCR translation
-     */
-    private fun performDropTranslation(dropX: Int, dropY: Int) {
-        val intent = Intent(this, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            putExtra("ACTION", "SCREEN_DROP_TRANSLATE")
-            putExtra("DROP_X", dropX)
-            putExtra("DROP_Y", dropY)
-        }
-        showFloatingResultOverlay(dropX, dropY, "Detecting & translating text...")
+        handler.postDelayed(autoIdleRunnable, 3500)
     }
 
     @SuppressLint("InflateParams")
-    private fun showFloatingResultOverlay(x: Int, y: Int, text: String) {
+    private fun showFloatingResultOverlay(x: Int, y: Int, translatedText: String, originalText: String) {
         removeResultOverlay()
 
         val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -289,23 +472,41 @@ class FloatingTranslatorService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            this.x = Math.max(20, Math.min(screenWidth - 450, x - 100))
-            this.y = Math.max(80, Math.min(screenHeight - 350, y + 50))
+            this.x = Math.max(20, Math.min(screenWidth - 340, x - 150))
+            this.y = Math.max(80, Math.min(screenHeight - 380, y + 40))
         }
 
         floatingResultView = LayoutInflater.from(this).inflate(R.layout.layout_floating_result_card, null)
-        val tvText = floatingResultView?.findViewById<TextView>(R.id.tvResultText)
-        val btnClose = floatingResultView?.findViewById<View>(R.id.btnCloseResult)
+        val tvResult = floatingResultView?.findViewById<TextView>(R.id.tvResultText)
+        val tvOriginal = floatingResultView?.findViewById<TextView>(R.id.tvOriginalText)
+        val btnClose = floatingResultView?.findViewById<ImageView>(R.id.btnCloseResult)
+        val btnSpeak = floatingResultView?.findViewById<View>(R.id.btnSpeakResult)
+        val btnCopy = floatingResultView?.findViewById<View>(R.id.btnCopyResult)
 
-        tvText?.text = text
+        tvResult?.text = translatedText
+        tvOriginal?.text = originalText
+
         btnClose?.setOnClickListener {
             removeResultOverlay()
+        }
+
+        btnSpeak?.setOnClickListener {
+            triggerHaptic()
+            textToSpeech?.speak(translatedText, TextToSpeech.QUEUE_FLUSH, null, "fhm_res_tts")
+        }
+
+        btnCopy?.setOnClickListener {
+            triggerHaptic()
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = ClipData.newPlainText("FHM Translate", translatedText)
+            clipboard.setPrimaryClip(clip)
+            Toast.makeText(this, "অনুবাদ কপি করা হয়েছে", Toast.LENGTH_SHORT).show()
         }
 
         windowManager?.addView(floatingResultView, resultParams)
 
         handler.removeCallbacks(autoDismissResultRunnable)
-        handler.postDelayed(autoDismissResultRunnable, 10000)
+        handler.postDelayed(autoDismissResultRunnable, 14000)
     }
 
     private fun removeResultOverlay() {
@@ -319,20 +520,25 @@ class FloatingTranslatorService : Service() {
         }
     }
 
-    private fun openFloatingControls() {
-        val openIntent = Intent(this, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            putExtra("TRIGGER_ACTION", "OPEN_FLOAT_PANEL")
+    private fun triggerHaptic() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator?.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator?.vibrate(30)
         }
-        startActivity(openIntent)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == "UPDATE_RESULT_TEXT") {
-            val translatedText = intent.getStringExtra("TRANSLATED_TEXT") ?: ""
-            val dropX = intent.getIntExtra("DROP_X", screenWidth / 2)
-            val dropY = intent.getIntExtra("DROP_Y", screenHeight / 2)
-            showFloatingResultOverlay(dropX, dropY, translatedText)
+        if (intent?.action == "ACTION_STOP_SERVICE") {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        val target = intent?.getStringExtra("TARGET_LANG")
+        if (!target.isNullOrBlank()) {
+            targetLangCode = target
+            val flagView = floatingView?.findViewById<TextView>(R.id.tvBubbleTargetFlag)
+            flagView?.text = "🇧🇩 ${target.uppercase()}"
         }
         return START_STICKY
     }
@@ -355,13 +561,13 @@ class FloatingTranslatorService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("FHM Translate")
-            .setContentText("Floating translator is active.")
+            .setContentTitle("FHM Translate (Hi Translate মোড সক্রিয়)")
+            .setContentText("স্ক্রিনের পাশের বারটি টেনে যেকোনো লেখার ওপর ধরুন")
             .setSmallIcon(R.drawable.ic_fhm_logo)
             .setOngoing(true)
             .setContentIntent(pendingOpenIntent)
-            .addAction(R.drawable.ic_open, "Open App", pendingOpenIntent)
-            .addAction(R.drawable.ic_close, "Stop", pendingStopIntent)
+            .addAction(R.drawable.ic_open, "অ্যাপ খুলুন", pendingOpenIntent)
+            .addAction(R.drawable.ic_close, "লুকান", pendingStopIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
@@ -373,7 +579,7 @@ class FloatingTranslatorService : Service() {
                 "FHM Floating Translator Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Shows active status for FHM Translate floating translator."
+                description = "FHM Translate floating screen translator"
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager?.createNotificationChannel(channel)
@@ -393,5 +599,7 @@ class FloatingTranslatorService : Service() {
             }
             floatingView = null
         }
+        textToSpeech?.stop()
+        textToSpeech?.shutdown()
     }
 }

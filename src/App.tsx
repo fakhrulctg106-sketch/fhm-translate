@@ -77,6 +77,7 @@ export default function App() {
     type: PermissionType;
     onGranted: () => void;
     onDenied: () => void;
+    onGrantInAppOnly?: () => void;
   } | null>(null);
 
   // Load saved configuration on mount
@@ -203,6 +204,12 @@ export default function App() {
           } else if (type === 'screenCapture') {
             await androidBridge.requestScreenCapture();
           }
+          const updated = savePermission(type, true);
+          setPermissions(updated);
+          setActivePermissionRequest(null);
+          resolve(true);
+        },
+        onGrantInAppOnly: () => {
           const updated = savePermission(type, true);
           setPermissions(updated);
           setActivePermissionRequest(null);
@@ -502,6 +509,7 @@ export default function App() {
           permissionType={activePermissionRequest.type}
           onGrant={activePermissionRequest.onGranted}
           onDeny={activePermissionRequest.onDenied}
+          onGrantInAppOnly={activePermissionRequest.onGrantInAppOnly}
         />
       )}
     </div>

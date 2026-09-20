@@ -6,16 +6,17 @@
     android:clipChildren="false"
     android:clipToPadding="false">
 
-    <!-- 1. Full Circular FHM Button (When active/restored) -->
+    <!-- 1. Full Circular FHM Button (When pulled out or dragging) -->
     <RelativeLayout
         android:id="@+id/fullBubbleLayout"
-        android:layout_width="54dp"
-        android:layout_height="54dp"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
         android:background="@drawable/bg_circular_bubble"
-        android:elevation="12dp"
+        android:elevation="14dp"
         android:gravity="center"
         android:visibility="visible">
 
+        <!-- Glowing inner center -->
         <TextView
             android:id="@+id/tvBrand"
             android:layout_width="wrap_content"
@@ -23,35 +24,193 @@
             android:layout_centerHorizontal="true"
             android:text="FHM"
             android:textColor="#FFFFFF"
-            android:textSize="12sp"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvBubbleTargetFlag"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_below="@id/tvBrand"
+            android:layout_centerHorizontal="true"
+            android:layout_marginTop="-2dp"
+            android:text="🇧🇩 BN"
+            android:textColor="#7DD3FC"
+            android:textSize="8sp"
             android:textStyle="bold" />
 
         <View
             android:id="@+id/statusIndicator"
-            android:layout_width="5dp"
-            android:layout_height="5dp"
+            android:layout_width="6dp"
+            android:layout_height="6dp"
             android:layout_alignParentBottom="true"
             android:layout_centerHorizontal="true"
-            android:layout_marginBottom="5dp"
+            android:layout_marginBottom="4dp"
             android:background="@drawable/bg_indicator_active" />
     </RelativeLayout>
 
-    <!-- 2. Small Subtle Edge Handle (When idle at screen edge - NO text) -->
+    <!-- 2. Small Ergonomic Edge Handle (When idle at screen edge - Hi Translate style) -->
     <LinearLayout
         android:id="@+id/collapsedHandle"
-        android:layout_width="14dp"
-        android:layout_height="54dp"
+        android:layout_width="16dp"
+        android:layout_height="64dp"
         android:background="@drawable/bg_collapsed_handle"
-        android:elevation="10dp"
+        android:elevation="12dp"
         android:gravity="center"
         android:orientation="vertical"
         android:visibility="gone">
 
-        <!-- Subtle minimalist grip indicator (No text) -->
+        <!-- Visual grip indicators -->
         <View
-            android:layout_width="2dp"
-            android:layout_height="24dp"
+            android:layout_width="3dp"
+            android:layout_height="14dp"
             android:background="@drawable/bg_grip_bar" />
+
+        <View
+            android:layout_width="3dp"
+            android:layout_height="14dp"
+            android:layout_marginTop="3dp"
+            android:background="@drawable/bg_grip_bar" />
+    </LinearLayout>
+
+    <!-- 3. Mini Floating Radial Menu (Shown on single tap, does NOT kick user out to MainActivity) -->
+    <LinearLayout
+        android:id="@+id/quickMenuLayout"
+        android:layout_width="180dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="62dp"
+        android:background="@drawable/bg_result_card"
+        android:elevation="18dp"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/menuGlobalTranslate"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🌐"
+                android:textSize="14sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="স্ক্রিন অনুবাদ (Global)"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#334155" />
+
+        <LinearLayout
+            android:id="@+id/menuAimTranslate"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🔍"
+                android:textSize="14sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="টেনে নিয়ে অনুবাদ করুন"
+                android:textColor="#38BDF8"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#334155" />
+
+        <LinearLayout
+            android:id="@+id/menuOpenMainApp"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚙️"
+                android:textSize="14sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="অ্যাপে যান (App)"
+                android:textColor="#94A3B8"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#334155" />
+
+        <LinearLayout
+            android:id="@+id/menuCloseFloating"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✕"
+                android:textColor="#EF4444"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="বাবল বন্ধ করুন"
+                android:textColor="#EF4444"
+                android:textSize="12sp" />
+        </LinearLayout>
+
     </LinearLayout>
 
 </FrameLayout>

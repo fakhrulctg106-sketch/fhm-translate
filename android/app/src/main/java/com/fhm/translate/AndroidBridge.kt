@@ -46,11 +46,43 @@ class AndroidBridge(
     }
 
     @JavascriptInterface
-    fun startFloatingBubbleService(x: Int, y: Int, size: String) {
+    fun openAppDetailsSettings() {
+        activity.runOnUiThread {
+            activity.openAppDetailsSettings()
+        }
+    }
+
+    @JavascriptInterface
+    fun isAccessibilityEnabled(): Boolean {
+        return FhmAccessibilityService.isServiceRunning()
+    }
+
+    @JavascriptInterface
+    fun openAccessibilitySettings() {
+        activity.runOnUiThread {
+            try {
+                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                activity.startActivity(intent)
+                Toast.makeText(
+                    activity,
+                    "অন্যান্য সব অ্যাপের ওপর অনুবাদের জন্য 'FHM Translate' সার্ভিসটি চালু (Allow) করুন",
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (e: Exception) {
+                activity.openAppDetailsSettings()
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun startFloatingBubbleService(x: Int, y: Int, size: String, targetLang: String = "bn") {
         val intent = Intent(activity, FloatingTranslatorService::class.java).apply {
             putExtra("INITIAL_X", x)
             putExtra("INITIAL_Y", y)
             putExtra("SIZE", size)
+            putExtra("TARGET_LANG", targetLang)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             activity.startForegroundService(intent)

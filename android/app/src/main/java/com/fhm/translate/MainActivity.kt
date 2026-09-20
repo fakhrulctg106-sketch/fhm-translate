@@ -162,6 +162,14 @@ class MainActivity : AppCompatActivity() {
 
     fun requestOverlayPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                // Show helpful toast for Android 13/14/15 restricted settings
+                Toast.makeText(
+                    this,
+                    "যদি 'Denied/ব্লক' দেখায়: ৩টি ডট (⋮) চেপে 'Allow restricted settings' করুন",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
             try {
                 val intent = Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -173,11 +181,33 @@ class MainActivity : AppCompatActivity() {
                     val fallbackIntent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
                     startActivityForResult(fallbackIntent, OVERLAY_PERMISSION_REQUEST_CODE)
                 } catch (e2: Exception) {
-                    Toast.makeText(this, "Please enable 'Display over other apps' in Settings", Toast.LENGTH_LONG).show()
+                    openAppDetailsSettings()
                 }
             }
         } else {
             notifyBridge("onOverlayPermissionGranted()")
+        }
+    }
+
+    fun openAppDetailsSettings() {
+        try {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:$packageName")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+            Toast.makeText(
+                this,
+                "App info: উপরে ৩টি ডট (⋮) চেপে 'Allow restricted settings' অনুমোদন করুন",
+                Toast.LENGTH_LONG
+            ).show()
+        } catch (e: Exception) {
+            try {
+                val intent = Intent(Settings.ACTION_SETTINGS)
+                startActivity(intent)
+            } catch (e2: Exception) {
+                Log.e("FHM_SETTINGS", "Cannot open settings", e2)
+            }
         }
     }
 

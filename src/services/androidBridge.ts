@@ -9,7 +9,7 @@ declare global {
       isNativeAndroid: () => boolean;
       checkOverlayPermission: () => boolean;
       requestOverlayPermission: () => void;
-      startFloatingBubbleService: (x: number, y: number, size: string) => void;
+      startFloatingBubbleService: (x: number, y: number, size: string, targetLang?: string) => void;
       stopFloatingBubbleService: () => void;
       updateFloatingPosition: (x: number, y: number) => void;
       startScreenCapture: () => void;
@@ -19,6 +19,9 @@ declare global {
       speakText: (text: string, lang: string, speed: number) => void;
       vibrate: (durationMs: number) => void;
       showToast: (message: string) => void;
+      openAppDetailsSettings: () => void;
+      isAccessibilityEnabled?: () => boolean;
+      openAccessibilitySettings?: () => void;
     };
     onAndroidVoiceResult?: (text: string) => void;
     onOverlayPermissionGranted?: () => void;
@@ -61,6 +64,14 @@ class AndroidBridgeService {
     return true;
   }
 
+  public openAppDetailsSettings() {
+    if (this.isNative() && window.AndroidBridge?.openAppDetailsSettings) {
+      window.AndroidBridge.openAppDetailsSettings();
+    } else {
+      this.showToast('Please open phone Settings > Apps > FHM Translate');
+    }
+  }
+
   public async requestScreenCapture(): Promise<boolean> {
     if (this.isNative() && window.AndroidBridge?.startScreenCapture) {
       window.AndroidBridge.startScreenCapture();
@@ -70,9 +81,24 @@ class AndroidBridgeService {
     return true;
   }
 
-  public startFloatingService(x = 20, y = 150, size = 'medium') {
+  public isAccessibilityEnabled(): boolean {
+    if (this.isNative() && window.AndroidBridge?.isAccessibilityEnabled) {
+      return window.AndroidBridge.isAccessibilityEnabled();
+    }
+    return true;
+  }
+
+  public openAccessibilitySettings() {
+    if (this.isNative() && window.AndroidBridge?.openAccessibilitySettings) {
+      window.AndroidBridge.openAccessibilitySettings();
+    } else {
+      this.openAppDetailsSettings();
+    }
+  }
+
+  public startFloatingService(x = 20, y = 150, size = 'medium', targetLang = 'bn') {
     if (this.isNative() && window.AndroidBridge?.startFloatingBubbleService) {
-      window.AndroidBridge.startFloatingBubbleService(x, y, size);
+      window.AndroidBridge.startFloatingBubbleService(x, y, size, targetLang);
     }
     // Update local state
     localStorage.setItem('fhm_floating_active', 'true');

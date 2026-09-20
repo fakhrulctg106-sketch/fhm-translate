@@ -222,6 +222,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </span>
               </div>
               <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-slate-800/40 border border-slate-800">
+                <span>Accessibility (Screen Text Reader - Hi Translate)</span>
+                <span className="font-semibold text-sky-400">
+                  Required for Screen Scan
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-slate-800/40 border border-slate-800">
                 <span>Camera (OCR Capture)</span>
                 <span className={`font-semibold ${permissions.camera ? 'text-emerald-400' : 'text-slate-500'}`}>
                   {permissions.camera ? 'Granted' : 'On-Demand'}
@@ -233,6 +239,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   {permissions.microphone ? 'Granted' : 'On-Demand'}
                 </span>
               </div>
+            </div>
+
+            {/* Hi Translate Accessibility Service Card */}
+            <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-xs text-slate-300 space-y-2.5">
+              <div className="font-bold text-sky-300 text-xs flex items-center justify-between">
+                <span>⚡ Hi Translate মোড: স্ক্রিনের লেখার ওপর ধরে রাখলে তাৎক্ষণিক অনুবাদ</span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                হোয়াটসঅ্যাপ, ফেসবুক, মেসেঞ্জার বা যেকোনো অ্যাপের লেখার ওপর বাবলটি ছেড়ে দিলে তাৎক্ষণিকভাবে অনুবাদ করার জন্য অ্যান্ড্রয়েডের <strong>Accessibility Service</strong> প্রয়োজন। নিচের বাটনে চাপ দিয়ে তালিকা থেকে <strong>FHM Translate</strong> চালু (On) করে নিন।
+              </p>
+              <button
+                onClick={() => androidBridge.openAccessibilitySettings()}
+                className="w-full py-2 px-3 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center space-x-1.5 shadow-md shadow-blue-900/40 transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Open Accessibility Settings (অ্যাক্সেসিবিলিটি অন করুন)</span>
+              </button>
+            </div>
+
+            {/* Android 13/14 Restricted Setting Fix */}
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-slate-300 space-y-2">
+              <div className="font-bold text-amber-300 text-[11px] flex items-center justify-between">
+                <span>Android 13/14: "App was denied access" বা লক সমস্যা?</span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                নতুন ইনস্টল করা অ্যাপে গুগল সিকিউরিটি পারমিশন সাময়িকভাবে লক রাখে। নিচের বাটনে চাপ দিয়ে অ্যাপ ইনফো পেজে গিয়ে <strong>উপরের ডানদিকের ৩টি ডট (⋮)</strong> চাপুন এবং <strong>"Allow restricted settings"</strong> দিন। এরপর পারমিশন সুইচটি অন হয়ে যাবে।
+              </p>
+              <button
+                onClick={() => androidBridge.openAppDetailsSettings()}
+                className="w-full py-2 px-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Open App Info Settings (৩টি ডট আনলক পেজ খুলুন)</span>
+              </button>
             </div>
           </div>
 

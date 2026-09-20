@@ -6,64 +6,157 @@
     android:background="@drawable/bg_result_card"
     android:elevation="16dp"
     android:orientation="vertical"
-    android:padding="12dp">
+    android:padding="14dp">
 
     <!-- Card Header -->
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:paddingBottom="6dp">
+        android:paddingBottom="8dp">
 
-        <TextView
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_alignParentStart="true"
             android:layout_centerVertical="true"
-            android:text="✨ FHM Translation"
-            android:textColor="#38BDF8"
-            android:textSize="12sp"
-            android:textStyle="bold" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvLangBadge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🌐 বাংলা অনুবাদ (Bengali)"
+                android:textColor="#38BDF8"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <ImageView
             android:id="@+id/btnCloseResult"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
             android:layout_alignParentEnd="true"
             android:layout_centerVertical="true"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:clickable="true"
             android:focusable="true"
+            android:padding="2dp"
             android:src="@drawable/ic_close" />
     </RelativeLayout>
 
     <View
         android:layout_width="match_parent"
         android:layout_height="1dp"
-        android:background="#1E293B" />
+        android:background="#334155" />
 
-    <!-- Translation Text Body -->
-    <TextView
-        android:id="@+id/tvResultText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="8dp"
-        android:lineSpacingExtra="3dp"
-        android:text="Translation result..."
-        android:textColor="#FFFFFF"
-        android:textSize="14sp"
-        android:textStyle="bold" />
-
+    <!-- Original Text Preview -->
     <TextView
         android:id="@+id/tvOriginalText"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
+        android:layout_marginTop="8dp"
         android:ellipsize="end"
-        android:maxLines="2"
-        android:text="Original text"
+        android:maxLines="3"
+        android:text="Detecting text..."
         android:textColor="#94A3B8"
-        android:textSize="11sp"
+        android:textSize="12sp"
         android:textStyle="italic" />
+
+    <!-- Translated Text Body -->
+    <TextView
+        android:id="@+id/tvResultText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="12dp"
+        android:lineSpacingExtra="4dp"
+        android:text="অনুবাদ করা হচ্ছে..."
+        android:textColor="#FFFFFF"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#334155" />
+
+    <!-- Actions Bar: Speak, Copy -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/btnSpeakResult"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="12dp">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_volume" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="শুনুন"
+                android:textColor="#38BDF8"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btnCopyResult"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginStart="12dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="12dp">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_copy" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="কপি করুন"
+                android:textColor="#38BDF8"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/tvBrandCredit"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="FHM"
+            android:textColor="#64748B"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
 </LinearLayout>

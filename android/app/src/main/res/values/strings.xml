@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">FHM Translate</string>
+    <string name="accessibility_service_description">FHM Translate uses this service to detect on-screen text in any app (like WhatsApp, Messenger, Browser) and instantly translate it to your chosen language when dragging or tapping the floating translator ball.</string>
 </resources>

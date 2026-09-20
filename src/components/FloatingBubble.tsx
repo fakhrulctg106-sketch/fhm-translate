@@ -108,9 +108,20 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
   const extractTextAtCoordinates = (clientX: number, clientY: number): string => {
     if (typeof document === 'undefined') return '';
 
+    // 1. Check window text selection
+    const selection = window.getSelection()?.toString().trim();
+    if (selection && selection.length > 1) {
+      return selection;
+    }
+
     const elements = document.elementsFromPoint(clientX, clientY);
     for (const el of elements) {
       if (el.closest('#fhm-floating-translator-root')) continue;
+
+      // 2. Check input or textarea value
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+        if (el.value?.trim()) return el.value.trim();
+      }
 
       const sampleText = (el as HTMLElement).dataset?.translateText;
       if (sampleText && sampleText.trim()) {
@@ -131,7 +142,7 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
       }
     }
 
-    return 'Questo è un testo di esempio sullo schermo da tradurre in tempo reale.';
+    return 'Hello, welcome to FHM Screen Translator. Drag and drop this lens over any text to translate instantly into Bengali!';
   };
 
   // Perform translation on drop
@@ -367,7 +378,9 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
             [dockSide === 'left' ? 'left' : 'right']: '0px',
             touchAction: 'none',
           }}
-          className="fixed pointer-events-auto z-50 cursor-grab active:cursor-grabbing transition-transform active:scale-95"
+          className={`fixed pointer-events-auto z-50 cursor-grab active:cursor-grabbing transition-transform active:scale-95 ${
+            dockSide === 'left' ? 'pl-0 pr-2' : 'pr-0 pl-2'
+          }`}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
@@ -375,14 +388,15 @@ export const FloatingBubble: React.FC<FloatingBubbleProps> = ({
           title="Drag to pull FHM Translator out"
         >
           <div
-            className={`w-3.5 h-14 bg-blue-600/75 hover:bg-blue-500/90 backdrop-blur-md border border-sky-300/40 shadow-lg shadow-blue-900/50 flex items-center justify-center transition-all ${
+            className={`w-5 sm:w-4.5 h-16 bg-gradient-to-b from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white backdrop-blur-md border border-sky-300/60 shadow-xl shadow-blue-900/60 flex flex-col items-center justify-center space-y-1 transition-all ${
               dockSide === 'left'
-                ? 'rounded-r-full border-l-0'
-                : 'rounded-l-full border-r-0'
+                ? 'rounded-r-2xl border-l-0 shadow-[4px_0_12px_rgba(37,99,235,0.4)]'
+                : 'rounded-l-2xl border-r-0 shadow-[-4px_0_12px_rgba(37,99,235,0.4)]'
             }`}
           >
-            {/* Subtle inner grip bar */}
-            <div className="w-0.5 h-6 rounded-full bg-white/70" />
+            {/* Subtle inner grip bars */}
+            <div className="w-1 h-3 rounded-full bg-white/90" />
+            <div className="w-1 h-3 rounded-full bg-white/60" />
           </div>
         </div>
       ) : (
